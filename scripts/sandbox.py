@@ -1,5 +1,9 @@
 """Throwaway mise projects that can't read or write the caller's mise state."""
-import contextlib, os, pathlib, tempfile
+
+import contextlib
+import os
+import pathlib
+import tempfile
 
 
 def env(root, proj):
@@ -28,5 +32,4 @@ def project(registry, tools):
         (proj / "registry.toml").write_text(registry, encoding="utf-8")
         pins = "".join(f'"{alias}" = "{version}"\n' for alias, version in tools.items())
         (proj / "mise.toml").write_text(f'include = ["registry.toml"]\n[tools]\n{pins}', encoding="utf-8")
-        (proj / "mise.lock").touch()
         yield proj, env(root, proj)

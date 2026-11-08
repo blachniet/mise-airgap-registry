@@ -1,0 +1,3 @@
+# Schema lookup fetches from SchemaStore (unreachable in an air gap) and mistakes tools/taplo.toml for taplo's own config.
+[schema]
+enabled = false

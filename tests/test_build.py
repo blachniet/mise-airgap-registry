@@ -1,4 +1,12 @@
-import importlib.util, os, pathlib, subprocess, sys, tempfile, textwrap, tomllib, unittest
+import importlib.util
+import os
+import pathlib
+import subprocess
+import sys
+import tempfile
+import textwrap
+import tomllib
+import unittest
 
 SCRIPT = pathlib.Path(__file__).resolve().parent.parent / "scripts" / "build.py"
 spec = importlib.util.spec_from_file_location("build", SCRIPT)
@@ -23,7 +31,7 @@ class BuildTest(unittest.TestCase):
         self.write("x.toml", HEAD + textwrap.dedent(body))
         text, errors = build.build(self.tools)
         self.assertEqual(errors, [])
-        header, table, line = text.splitlines()
+        _, _, line = text.splitlines()
         return line
 
     def options(self, body):
@@ -91,7 +99,7 @@ class OutputTest(BuildTest):
         self.assertEqual(self.options("url = \"os(macos='darwin')\""), "url=\"os(macos='darwin')\"")
 
     def test_both_quote_types(self):
-        self.assertEqual(self.options("url = \"a'b\\\"c\""), "url=\"a'b\\\"c\"")
+        self.assertEqual(self.options('url = "a\'b\\"c"'), 'url="a\'b\\"c"')
 
     def test_regex_backslashes_pass_through_literal(self):
         self.assertEqual(self.options(r"version_regex = 'v(\d+)'"), r"version_regex='v(\d+)'")
@@ -112,7 +120,7 @@ class OutputTest(BuildTest):
         )
 
     def test_mixed_scalar_array(self):
-        self.assertEqual(self.options("k = [1, true, \"a'b\"]"), "k=['1','true',\"a'b\"]")
+        self.assertEqual(self.options('k = [1, true, "a\'b"]'), "k=['1','true',\"a'b\"]")
 
 
 class ValidationTest(BuildTest):
@@ -133,7 +141,10 @@ class ValidationTest(BuildTest):
     def test_empty_test_version(self):
         for v in ('""', '" "', "1", "[]"):
             with self.subTest(v=v):
-                self.assertIn("test_version: must be a non-empty string", self.error(f'backend = "http:x"\ntest_version = {v}\nurl = "u"'))
+                self.assertIn(
+                    "test_version: must be a non-empty string",
+                    self.error(f'backend = "http:x"\ntest_version = {v}\nurl = "u"'),
+                )
 
     def test_invalid_file_stem(self):
         for name in ("Age.toml", "-age.toml", "a.b.toml", "a b.toml", "_a.toml"):
@@ -157,13 +168,17 @@ class ValidationTest(BuildTest):
     def test_nested_arrays(self):
         for body in ("a = [[1]]", "a = [{ b = 1 }]", "[[a]]\nb = 1"):
             with self.subTest(body=body):
-                self.assertTrue(self.error(HEAD + body).endswith("a: arrays may only contain strings, integers, and booleans"))
+                self.assertTrue(
+                    self.error(HEAD + body).endswith("a: arrays may only contain strings, integers, and booleans")
+                )
 
     def test_empty_array(self):
         self.assertTrue(self.error(HEAD + "a = []").endswith("a: empty array"))
 
     def test_empty_table(self):
-        self.assertTrue(self.error(HEAD + 'url = "u"\n[platforms.linux-x64]').endswith("platforms.linux-x64: empty table"))
+        self.assertTrue(
+            self.error(HEAD + 'url = "u"\n[platforms.linux-x64]').endswith("platforms.linux-x64: empty table")
+        )
 
     def test_no_options(self):
         self.assertTrue(self.error(HEAD).endswith("no backend options"))
@@ -181,19 +196,24 @@ class ValidationTest(BuildTest):
         self.assertIn("x.toml: ", self.error("backend = "))
 
     def test_collects_errors_across_files(self):
-        errors = self.errors({
-            "a.toml": 'test_version = "1"\nd = 1.5',
-            "b.toml": HEAD + "e = []",
-            "c.toml": HEAD + 'url = "u"',
-        })
-        self.assertEqual(errors, [
-            f"{self.tools}/a.toml: backend: required",
-            f"{self.tools}/a.toml: d: unsupported value type float",
-            f"{self.tools}/b.toml: e: empty array",
-        ])
+        errors = self.errors(
+            {
+                "a.toml": 'test_version = "1"\nd = 1.5',
+                "b.toml": HEAD + "e = []",
+                "c.toml": HEAD + 'url = "u"',
+            }
+        )
+        self.assertEqual(
+            errors,
+            [
+                f"{self.tools}/a.toml: backend: required",
+                f"{self.tools}/a.toml: d: unsupported value type float",
+                f"{self.tools}/b.toml: e: empty array",
+            ],
+        )
 
     def test_empty_tools_dir(self):
-        text, errors = build.build(self.tools)
+        _, errors = build.build(self.tools)
         self.assertEqual(errors, [f"{self.tools}: no *.toml files"])
 
     def test_ignores_toml_directories(self):
@@ -252,7 +272,7 @@ class RoundTripTest(BuildTest):
         self.assertEqual(errors, [])
         backend = tomllib.loads(text)["tool_alias"]["airgap:x"]
         self.assertTrue(backend.startswith("http:x[") and backend.endswith("]"), backend)
-        opts = tomllib.loads(f"t = {{{backend[len('http:x['):-1]}}}")["t"]
+        opts = tomllib.loads(f"t = {{{backend[len('http:x[') : -1]}}}")["t"]
         expected = tomllib.loads(HOSTILE)
         del expected["backend"], expected["test_version"]
         self.assertEqual(opts, stringify(expected))
@@ -269,7 +289,7 @@ class MirrorTest(BuildTest):
         text, errors = build.build(self.tools, self.mirror(mirror))
         self.assertEqual(errors, [])
         backend = tomllib.loads(text)["tool_alias"]["airgap:x"]
-        return tomllib.loads(f"t = {{{backend[len('http:x['):-1]}}}")["t"]
+        return tomllib.loads(f"t = {{{backend[len('http:x[') : -1]}}}")["t"]
 
     def mirror_errors(self, mirror, tool='url = "u"'):
         self.write("x.toml", HEAD + tool)
@@ -361,9 +381,7 @@ class MirrorTest(BuildTest):
         self.assertEqual(opts["platforms"]["linux-x64"]["url"], "https://m.example/l")
 
     def test_override_values_are_attributed_to_mirror(self):
-        errors = self.mirror_errors(
-            "[tools.x]\nurl = \"a'''b\"\n[tools.x.platforms.linux-x64]\nurl = 1.5\n"
-        )
+        errors = self.mirror_errors("[tools.x]\nurl = \"a'''b\"\n[tools.x.platforms.linux-x64]\nurl = 1.5\n")
         self.assertEqual(len(errors), 2, errors)
         self.assertIn("mirror.toml: tools.x.url: ''' cannot appear", errors[0])
         self.assertIn("mirror.toml: tools.x.platforms.linux-x64.url: unsupported value type float", errors[1])
@@ -416,7 +434,7 @@ class MirrorTest(BuildTest):
         explicit, errors = build.build(self.tools, self.mirror('prefix = "airgap"\n'))
         self.assertEqual(errors, [])
         self.assertEqual(explicit.splitlines()[1:], plain.splitlines()[1:])
-        self.assertIn("\"airgap:x\" = ", plain)
+        self.assertIn('"airgap:x" = ', plain)
 
     def test_custom_prefix_applies_to_upstream_and_local_tools(self):
         self.write("x.toml", HEAD + 'url = "u"\n')
@@ -456,7 +474,10 @@ class MirrorTest(BuildTest):
         self.write("x.toml", HEAD + 'url = "u"')
         out = self.root / "mise.toml"
         result = subprocess.run(
-            [sys.executable, SCRIPT, self.tools, out, self.mirror('prefix = "aqua"\n')], capture_output=True, text=True
+            [sys.executable, SCRIPT, self.tools, out, self.mirror('prefix = "aqua"\n')],
+            check=False,
+            capture_output=True,
+            text=True,
         )
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("prefix: 'aqua' is a mise backend name", result.stderr)
@@ -507,9 +528,9 @@ class LocalToolsTest(BuildTest):
     def test_mirror_rewrites_skip_local_tools(self):
         self.write("up.toml", HEAD + 'url = "https://github.com/up"\n')
         self.local("in.toml", HEAD + 'url = "https://github.com/in"\n')
-        text, errors = build.build(self.tools, self.mirror(
-            '[[rewrite]]\nfrom = "https://github.com/"\nto = "https://m/"\n'
-        ))
+        text, errors = build.build(
+            self.tools, self.mirror('[[rewrite]]\nfrom = "https://github.com/"\nto = "https://m/"\n')
+        )
         self.assertEqual(errors, [])
         aliases = tomllib.loads(text)["tool_alias"]
         self.assertEqual(aliases["airgap:up"], "http:x[url='https://m/up']")
@@ -534,11 +555,16 @@ class LocalToolsTest(BuildTest):
 
     def test_local_tools_are_validated(self):
         self.write("a.toml", HEAD + 'url = "u"\n')
-        self.local("Bad.toml", 'url = 1.5\n')
+        self.local("Bad.toml", "url = 1.5\n")
         text, errors = build.build(self.tools)
         self.assertIsNone(text)
         joined = "\n".join(errors)
-        for expected in ("file name must match", "backend: required", "test_version: required", "unsupported value type float"):
+        for expected in (
+            "file name must match",
+            "backend: required",
+            "test_version: required",
+            "unsupported value type float",
+        ):
             self.assertIn(expected, joined)
         self.assertTrue(all("local/Bad.toml" in e for e in errors), errors)
 
@@ -546,7 +572,7 @@ class LocalToolsTest(BuildTest):
 class CliTest(BuildTest):
     def run_build(self, out, env=None, *extra):
         return subprocess.run(
-            [sys.executable, SCRIPT, self.tools, out, *extra], capture_output=True, text=True, env=env
+            [sys.executable, SCRIPT, self.tools, out, *extra], check=False, capture_output=True, text=True, env=env
         )
 
     def test_writes_utf8_under_non_utf8_locale(self):
@@ -554,7 +580,10 @@ class CliTest(BuildTest):
         env.pop("PYTHONIOENCODING", None)
         probe = subprocess.run(
             [sys.executable, "-c", "import locale; print(locale.getencoding())"],
-            capture_output=True, text=True, env=env,
+            check=False,
+            capture_output=True,
+            text=True,
+            env=env,
         )
         if "8859" not in probe.stdout:
             self.skipTest(f"ISO8859-1 locale unavailable: {probe.stdout.strip()}")
@@ -591,7 +620,7 @@ class CliTest(BuildTest):
         self.assertIn("url='https://b/x'", out.read_text(encoding="utf-8"))
 
     def test_usage(self):
-        result = subprocess.run([sys.executable, SCRIPT], capture_output=True, text=True)
+        result = subprocess.run([sys.executable, SCRIPT], check=False, capture_output=True, text=True)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("usage:", result.stderr)
 

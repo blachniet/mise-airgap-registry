@@ -1,12 +1,36 @@
 """Flatten tools/*.toml into a mise [tool_alias] registry file."""
-import pathlib, re, sys, tomllib
+
+import pathlib
+import re
+import sys
+import tomllib
 
 DEFAULT_PREFIX = "airgap"
 PREFIX_NAME = re.compile(r"[a-z][a-z0-9-]*")
 # `mise backends ls` on mise 2026.11.x plus the pipx and poetry aliases. A prefix equal to one makes `<prefix>:<tool>` a backend reference.
 BACKENDS = (
-    "aqua", "asdf", "cargo", "conda", "core", "dotnet", "forgejo", "gem", "github", "gitlab", "go", "http",
-    "npm", "packslip", "pipx", "poetry", "pypi", "s3", "spinel", "spm", "ubi", "vfox",
+    "aqua",
+    "asdf",
+    "cargo",
+    "conda",
+    "core",
+    "dotnet",
+    "forgejo",
+    "gem",
+    "github",
+    "gitlab",
+    "go",
+    "http",
+    "npm",
+    "packslip",
+    "pipx",
+    "poetry",
+    "pypi",
+    "s3",
+    "spinel",
+    "spm",
+    "ubi",
+    "vfox",
 )
 HEADER = "# @generated from {} - do not edit"
 ALIAS_NAME = re.compile(r"[a-z0-9][a-z0-9_-]*")
@@ -109,7 +133,7 @@ def rule(r):
     if not (isinstance(src, str) and src) or not isinstance(to, str):
         raise SpecError("from must be a non-empty string and to a string")
     quote(to)
-    return lambda url: to + url[len(src):] if url.startswith(src) else url
+    return lambda url: to + url[len(src) :] if url.startswith(src) else url
 
 
 def override_errors(o):
@@ -175,8 +199,12 @@ def read_prefix(mirror):
 
 def mirror_arg(parser):
     default = pathlib.Path("mirror.toml")
-    parser.add_argument("--mirror", type=pathlib.Path, default=default if default.is_file() else None,
-                        help="fork config for the alias prefix (default: mirror.toml if present)")
+    parser.add_argument(
+        "--mirror",
+        type=pathlib.Path,
+        default=default if default.is_file() else None,
+        help="fork config for the alias prefix (default: mirror.toml if present)",
+    )
 
 
 def alias(f, rules=(), override=None, prefix=DEFAULT_PREFIX):
@@ -205,7 +233,7 @@ def alias(f, rules=(), override=None, prefix=DEFAULT_PREFIX):
             errors.append(f"{'.'.join(path)}: {e}")
     if errors:
         return None, errors
-    return f'"{prefix}:{f.stem}" = \'\'\'{backend}[{",".join(opts)}]\'\'\'', []
+    return f"\"{prefix}:{f.stem}\" = '''{backend}[{','.join(opts)}]'''", []
 
 
 def toml_files(d):

@@ -1,4 +1,9 @@
-import os, pathlib, subprocess, sys, tempfile, textwrap, unittest
+import os
+import pathlib
+import subprocess
+import sys
+import tempfile
+import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 SCRIPT = ROOT / "scripts" / "urls.py"
@@ -46,7 +51,11 @@ class UrlsTest(unittest.TestCase):
     def run_urls(self, *args, env=None):
         return subprocess.run(
             [sys.executable, SCRIPT, "--tools", self.tools, *args],
-            capture_output=True, text=True, env=env or self.env, cwd=self.root,
+            check=False,
+            capture_output=True,
+            text=True,
+            env=env or self.env,
+            cwd=self.root,
         )
 
     def test_dedupes_and_sorts_urls_and_reports_unpublished(self):
@@ -69,7 +78,12 @@ class UrlsTest(unittest.TestCase):
 
     def test_sandboxes_mise_env(self):
         log = self.root / "mise.log"
-        env = {**self.env, "FAKE_MISE_LOG": str(log), "MISE_URL_REPLACEMENTS": '{"a":"b"}', "XDG_STATE_HOME": "/real/state"}
+        env = {
+            **self.env,
+            "FAKE_MISE_LOG": str(log),
+            "MISE_URL_REPLACEMENTS": '{"a":"b"}',
+            "XDG_STATE_HOME": "/real/state",
+        }
         result = self.run_urls("x", "1.0.0", "--platforms", "linux-x64", env=env)
         self.assertEqual(result.returncode, 0, result.stderr)
         seen = log.read_text()
@@ -131,7 +145,9 @@ class UrlsTest(unittest.TestCase):
 
     def test_custom_prefix_from_mirror_gives_internet_urls(self):
         mirror = self.root / "mirror.toml"
-        mirror.write_text('prefix = "acme"\n[[rewrite]]\nfrom = "https://h/"\nto = "https://internal/"\n', encoding="utf-8")
+        mirror.write_text(
+            'prefix = "acme"\n[[rewrite]]\nfrom = "https://h/"\nto = "https://internal/"\n', encoding="utf-8"
+        )
         result = self.run_urls("x", "1.0.0", "--platforms", "linux-x64", "--mirror", mirror)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout, "https://h/x-linux.tar.gz\n")
@@ -145,9 +161,9 @@ class UrlsTest(unittest.TestCase):
     def test_default_prefix_without_mirror(self):
         text, errors = urls.registry(self.tools, "x")
         self.assertEqual(errors, [])
-        self.assertTrue(text.startswith("[tool_alias]\n\"airgap:x\""))
+        self.assertTrue(text.startswith('[tool_alias]\n"airgap:x"'))
         text, errors = urls.registry(self.tools, "x", "acme")
-        self.assertTrue(text.startswith("[tool_alias]\n\"acme:x\""))
+        self.assertTrue(text.startswith('[tool_alias]\n"acme:x"'))
 
     def test_invalid_prefix_in_mirror(self):
         mirror = self.root / "mirror.toml"

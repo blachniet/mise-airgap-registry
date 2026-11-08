@@ -1,0 +1,12 @@
+backend = "http:ruff"
+test_version = "0.17.4"
+url = "https://releases.astral.sh/github/ruff/releases/download/{{version}}/ruff-{{ arch(x64='x86_64', arm64='aarch64') }}-{{ os(linux='unknown-linux-' ~ libc(), macos='apple-darwin') }}.tar.gz"
+strip_components = 1
+
+[platforms.windows-x64]
+url = "https://releases.astral.sh/github/ruff/releases/download/{{version}}/ruff-x86_64-pc-windows-msvc.zip"
+strip_components = 0
+
+[platforms.windows-arm64]
+url = "https://releases.astral.sh/github/ruff/releases/download/{{version}}/ruff-aarch64-pc-windows-msvc.zip"
+strip_components = 0

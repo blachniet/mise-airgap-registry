@@ -1,11 +1,25 @@
 """Print the internet URLs to mirror for one tools/<name>.toml at a version."""
-import argparse, concurrent.futures, pathlib, re, subprocess, sys, tomllib
 
-import build, sandbox
+import argparse
+import concurrent.futures
+import pathlib
+import re
+import subprocess
+import sys
+import tomllib
+
+import build
+import sandbox
 
 PLATFORMS = (
-    "linux-x64", "linux-arm64", "linux-x64-musl", "linux-arm64-musl",
-    "macos-x64", "macos-arm64", "windows-x64", "windows-arm64",
+    "linux-x64",
+    "linux-arm64",
+    "linux-x64-musl",
+    "linux-arm64-musl",
+    "macos-x64",
+    "macos-arm64",
+    "windows-x64",
+    "windows-arm64",
 )
 VERSION = re.compile(r"[A-Za-z0-9][A-Za-z0-9._+-]*")
 NOT_FOUND = re.compile(r"404 Not Found\) for url \((\S+?)\)")
@@ -38,7 +52,7 @@ def lock_urls(lock, prefix, name):
 def lock(text, prefix, name, version, platform):
     with sandbox.project(text, {f"{prefix}:{name}": version}) as (proj, env):
         result = subprocess.run(
-            ["mise", "lock", "--platform", platform], cwd=proj, env=env, capture_output=True, text=True
+            ["mise", "lock", "--platform", platform], cwd=proj, env=env, check=False, capture_output=True, text=True
         )
         if result.returncode:
             missing = NOT_FOUND.search(result.stderr)

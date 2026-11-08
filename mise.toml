@@ -6,10 +6,23 @@ python.uv_venv_auto = "source"
 [tools]
 "airgap:uv" = "0.13.7"
 "airgap:age" = "1.2.1"
+"airgap:actionlint" = "1.7.12"
+"airgap:shellcheck" = "0.11.0"
+"airgap:hk" = "2.11.1"
+"airgap:ruff" = "0.17.4"
+"airgap:taplo" = "0.10.0"
 
 [tasks.build]
 description = "Generate dist/mise.toml from tools/*.toml and mirror.toml"
 run = "uv run scripts/build.py tools dist/mise.toml mirror.toml"
+
+[tasks.lint]
+description = "Run linters (see hk.pkl)"
+run = "hk check --all"
+
+[tasks.fix]
+description = "Apply linter fixes and formatting (see hk.pkl)"
+run = "hk fix --all"
 
 [tasks.test]
 description = "Run tests"

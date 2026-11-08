@@ -53,6 +53,7 @@ See [`tools/`](tools/) for the available tools.
 - **`airgap is not a valid plugin name`** (or your fork's prefix): mise didn't load the registry. Check the `include` line in your `mise.toml`.
 - **`a config include must be a git:: URL`**: replace `<REGISTRY_GIT_URL>` and `<TAG>` in the `include` line.
 - **A tool or version won't install**: the artifact may not be in your mirror yet. Ask your registry's maintainers.
+- **`mise install` fails with a 404 for another platform** (e.g. hk publishes no Intel macOS build): with a `mise.lock`, mise locks every default platform. Limit them with [`lockfile_platforms`](https://mise.jdx.dev/configuration/settings.html#lockfile_platforms) under `[settings]`.
 
 ## Maintaining a fork
 
@@ -151,4 +152,7 @@ After any change, rebuild the registry and commit `dist/mise.toml` along with yo
 ```sh
 mise run build
 mise run test
+mise run lint   # or `mise run fix` to apply fixes
 ```
+
+Linters run through [hk](https://hk.jdx.dev), configured in `hk.pkl`. To run them on every commit, install the git hook once per clone with `hk install --mise`.
