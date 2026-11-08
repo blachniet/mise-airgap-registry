@@ -6,10 +6,15 @@ python.uv_venv_auto = "source"
 [tools]
 "airgap:uv" = "0.13.7"
 "airgap:age" = "1.2.1"
+"airgap:actionlint" = "1.7.12"
 
 [tasks.build]
 description = "Generate dist/mise.toml from tools/*.toml and mirror.toml"
 run = "uv run scripts/build.py tools dist/mise.toml mirror.toml"
+
+[tasks.lint]
+description = "Lint GitHub Actions workflows"
+run = "actionlint"
 
 [tasks.test]
 description = "Run tests"
