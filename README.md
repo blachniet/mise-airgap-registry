@@ -151,4 +151,5 @@ After any change, rebuild the registry and commit `dist/mise.toml` along with yo
 ```sh
 mise run build
 mise run test
+mise run lint
 ```
