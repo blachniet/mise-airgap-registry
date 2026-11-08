@@ -3,6 +3,15 @@
 # tools/*.toml always keep the internet URLs; edit only this file in a fork.
 # Rules and overrides don't apply to tools/local/*.toml.
 #
+# prefix = "acme" sets the alias prefix (acme:<tool>). The default is "airgap".
+# It must match [a-z][a-z0-9-]* and must not be a mise backend name (http,
+# github, aqua, ...). Use a unique org-style name, not a mise tool or plugin
+# name such as gh or uv. Choose it once when forking: changing it later breaks
+# consumers' [tools] entries, lockfiles and install directories. Also update
+# the tool names in this repo's own mise.toml.
+#
+# prefix = "acme"
+#
 # [[rewrite]] rules apply to every `url` and `*_url` option, including
 # platforms.*.url. A rule replaces `from` with `to` when the URL starts with
 # `from`. Rules apply in order and the first one that matches wins. Rules see

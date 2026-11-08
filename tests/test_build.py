@@ -410,6 +410,58 @@ class MirrorTest(BuildTest):
         self.assertEqual(len(errors), 1, errors)
         self.assertIn("absent.toml", errors[0])
 
+    def test_default_prefix_output_is_unchanged(self):
+        self.write("x.toml", HEAD + 'url = "u"\n')
+        plain, _ = build.build(self.tools)
+        explicit, errors = build.build(self.tools, self.mirror('prefix = "airgap"\n'))
+        self.assertEqual(errors, [])
+        self.assertEqual(explicit.splitlines()[1:], plain.splitlines()[1:])
+        self.assertIn("\"airgap:x\" = ", plain)
+
+    def test_custom_prefix_applies_to_upstream_and_local_tools(self):
+        self.write("x.toml", HEAD + 'url = "u"\n')
+        (self.tools / "local").mkdir()
+        self.write("local/y.toml", HEAD + 'url = "v"\n')
+        text, errors = build.build(self.tools, self.mirror('prefix = "acme-2"\n'))
+        self.assertEqual(errors, [])
+        self.assertEqual(
+            text.splitlines()[2:],
+            ["\"acme-2:x\" = '''http:x[url='u']'''", "\"acme-2:y\" = '''http:x[url='v']'''"],
+        )
+
+    def test_invalid_prefixes(self):
+        cases = {
+            'prefix = ""': "must match",
+            'prefix = "Acme"': "must match",
+            'prefix = "1acme"': "must match",
+            'prefix = "ac_me"': "must match",
+            'prefix = "ac:me"': "must match",
+            'prefix = "http"': "'http' is a mise backend name",
+            'prefix = "github"': "'github' is a mise backend name",
+            "prefix = 1": "prefix: must be a string",
+            "prefix = ['a']": "prefix: must be a string",
+        }
+        for body, expected in cases.items():
+            with self.subTest(body=body):
+                errors = self.mirror_errors(body + "\n")
+                self.assertEqual(len(errors), 1, errors)
+                self.assertIn("mirror.toml: prefix: ", errors[0])
+                self.assertIn(expected, errors[0])
+
+    def test_prefix_error_is_collected_with_others(self):
+        errors = self.mirror_errors('prefix = "npm"\nnope = 1\n', tool="")
+        self.assertEqual(len(errors), 3, errors)
+
+    def test_cli_writes_nothing_on_invalid_prefix(self):
+        self.write("x.toml", HEAD + 'url = "u"')
+        out = self.root / "mise.toml"
+        result = subprocess.run(
+            [sys.executable, SCRIPT, self.tools, out, self.mirror('prefix = "aqua"\n')], capture_output=True, text=True
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("prefix: 'aqua' is a mise backend name", result.stderr)
+        self.assertFalse(out.exists())
+
 
 class LocalToolsTest(BuildTest):
     def local(self, name, body):

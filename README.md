@@ -26,7 +26,7 @@ For fork maintainers:
 
 ### Getting started
 
-[Include](https://mise.jdx.dev/configuration.html#include) your registry in your project's `mise.toml`, then add tools with the `airgap:` prefix. Use the git URL of the registry your organization provides (this repository, or a fork of it), and pin a tag or commit so the registry only changes when you choose:
+[Include](https://mise.jdx.dev/configuration.html#include) your registry in your project's `mise.toml`, then add tools with the `airgap:` prefix (a fork may use a different prefix; ask your registry's maintainers). Use the git URL of the registry your organization provides (this repository, or a fork of it), and pin a tag or commit so the registry only changes when you choose:
 
 ```toml
 include = ["git::<REGISTRY_GIT_URL>//dist/mise.toml?ref=<TAG>"]
@@ -50,7 +50,7 @@ See [`tools/`](tools/) for the available tools.
 
 ### Troubleshooting
 
-- **`airgap is not a valid plugin name`**: mise didn't load the registry. Check the `include` line in your `mise.toml`.
+- **`airgap is not a valid plugin name`** (or your fork's prefix): mise didn't load the registry. Check the `include` line in your `mise.toml`.
 - **`a config include must be a git:: URL`**: replace `<REGISTRY_GIT_URL>` and `<TAG>` in the `include` line.
 - **A tool or version won't install**: the artifact may not be in your mirror yet. Ask your registry's maintainers.
 
@@ -59,6 +59,17 @@ See [`tools/`](tools/) for the available tools.
 Fork this repository when your air gap needs its own configuration: artifacts at different URLs in your mirror, or internal tools. Keep pulling from upstream to get new tools. Your changes live in `mirror.toml` and `tools/local/`, which upstream leaves alone, so merges stay clean. You'll need to rebuild `dist/mise.toml` after each merge.
 
 Run the examples below from a clone of your fork.
+
+### Choose the alias prefix
+
+Set `prefix` in [`mirror.toml`](mirror.toml) to name your registry's aliases (`acme:terraform`) instead of `airgap:terraform`, then rebuild. It must match `[a-z][a-z0-9-]*` and must not be a mise backend name such as `http` or `github`. Use a unique org-style name, not a mise tool or plugin name such as `gh` or `uv`.
+
+```toml
+# mirror.toml
+prefix = "acme"
+```
+
+Choose it once, when you create the fork. Changing it later breaks consumers' `[tools]` entries, lockfiles and install directories. This repository's own `mise.toml` uses `airgap:` tool names, so edit them too after changing the prefix.
 
 ### Find artifacts that need to be mirrored
 
@@ -108,7 +119,7 @@ url = "https://registry.example.com/acme/acme-cli/{{version}}/acme-cli-{{ os() }
 mise run build
 ```
 
-Registry users install them like any other tool: `"airgap:acme-cli" = "2.3.0"`. Names must not clash with `tools/*.toml`, and `mirror.toml` doesn't apply to them.
+Registry users install them like any other tool: `"airgap:acme-cli" = "2.3.0"` (with your prefix). Names must not clash with `tools/*.toml`, and `mirror.toml` doesn't apply to them.
 
 ### Add a new tool
 

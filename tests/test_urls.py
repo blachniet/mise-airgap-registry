@@ -18,9 +18,10 @@ if platform == "windows-arm64":
 if platform == "macos-x64":
     sys.exit("mise ERROR something else broke")
 url = "https://h/x-linux.tar.gz" if platform.startswith("linux") else f"https://h/x-{platform}.zip"
+alias = pathlib.Path("mise.toml").read_text().splitlines()[-1].split('"')[1]
 pathlib.Path("mise.lock").write_text(
-    f'[[tools."airgap:x"]]\\nversion = "1.0.0"\\n'
-    f'[tools."airgap:x"."platforms.{platform}"]\\nurl = "{url}"\\n'
+    f'[[tools."{alias}"]]\\nversion = "1.0.0"\\n'
+    f'[tools.\"{alias}\"."platforms.{platform}"]\\nurl = "{url}"\\n'
 )
 """
 
@@ -45,7 +46,7 @@ class UrlsTest(unittest.TestCase):
     def run_urls(self, *args, env=None):
         return subprocess.run(
             [sys.executable, SCRIPT, "--tools", self.tools, *args],
-            capture_output=True, text=True, env=env or self.env,
+            capture_output=True, text=True, env=env or self.env, cwd=self.root,
         )
 
     def test_dedupes_and_sorts_urls_and_reports_unpublished(self):
@@ -128,6 +129,33 @@ class UrlsTest(unittest.TestCase):
         self.assertEqual(errors, [])
         self.assertEqual(text, "[tool_alias]\n\"airgap:x\" = '''http:x[url='https://h/x-{{ os() }}']'''\n")
 
+    def test_custom_prefix_from_mirror_gives_internet_urls(self):
+        mirror = self.root / "mirror.toml"
+        mirror.write_text('prefix = "acme"\n[[rewrite]]\nfrom = "https://h/"\nto = "https://internal/"\n', encoding="utf-8")
+        result = self.run_urls("x", "1.0.0", "--platforms", "linux-x64", "--mirror", mirror)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, "https://h/x-linux.tar.gz\n")
+
+    def test_default_mirror_is_read_from_cwd(self):
+        (self.root / "mirror.toml").write_text('prefix = "http"\n', encoding="utf-8")
+        result = self.run_urls("x", "1.0.0")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("mirror.toml: prefix: 'http' is a mise backend name", result.stderr)
+
+    def test_default_prefix_without_mirror(self):
+        text, errors = urls.registry(self.tools, "x")
+        self.assertEqual(errors, [])
+        self.assertTrue(text.startswith("[tool_alias]\n\"airgap:x\""))
+        text, errors = urls.registry(self.tools, "x", "acme")
+        self.assertTrue(text.startswith("[tool_alias]\n\"acme:x\""))
+
+    def test_invalid_prefix_in_mirror(self):
+        mirror = self.root / "mirror.toml"
+        mirror.write_text('prefix = "http"\n', encoding="utf-8")
+        result = self.run_urls("x", "1.0.0", "--mirror", mirror)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("mirror.toml: prefix: 'http' is a mise backend name", result.stderr)
+
     def test_lock_urls_reads_every_entry(self):
         lock = {
             "tools": {
@@ -138,7 +166,7 @@ class UrlsTest(unittest.TestCase):
                 "airgap:y": [{"platforms.linux-x64": {"url": "other"}}],
             }
         }
-        self.assertEqual(urls.lock_urls(lock, "x"), ["a", "b"])
+        self.assertEqual(urls.lock_urls(lock, "airgap", "x"), ["a", "b"])
 
 
 if __name__ == "__main__":

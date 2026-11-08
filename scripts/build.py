@@ -1,7 +1,13 @@
 """Flatten tools/*.toml into a mise [tool_alias] registry file."""
 import pathlib, re, sys, tomllib
 
-PREFIX = "airgap"
+DEFAULT_PREFIX = "airgap"
+PREFIX_NAME = re.compile(r"[a-z][a-z0-9-]*")
+# `mise backends ls` on mise 2026.11.x plus the pipx and poetry aliases. A prefix equal to one makes `<prefix>:<tool>` a backend reference.
+BACKENDS = (
+    "aqua", "asdf", "cargo", "conda", "core", "dotnet", "forgejo", "gem", "github", "gitlab", "go", "http",
+    "npm", "packslip", "pipx", "poetry", "pypi", "s3", "spinel", "spm", "ubi", "vfox",
+)
 HEADER = "# @generated from {} - do not edit"
 ALIAS_NAME = re.compile(r"[a-z0-9][a-z0-9_-]*")
 BACKEND = re.compile(rf"http:{ALIAS_NAME.pattern}")
@@ -114,12 +120,25 @@ def override_errors(o):
             yield f"{'.'.join(path)}: {e}"
 
 
+def prefix_error(v):
+    if not isinstance(v, str):
+        return "must be a string"
+    if not PREFIX_NAME.fullmatch(v):
+        return f"{v!r} must match {PREFIX_NAME.pattern}"
+    if v in BACKENDS:
+        return f"{v!r} is a mise backend name"
+
+
 def load_mirror(f):
     try:
         mirror = tomllib.loads(f.read_text(encoding="utf-8"))
     except (OSError, tomllib.TOMLDecodeError, UnicodeDecodeError) as e:
-        return ([], {}), [str(e)]
-    errors = [f"{k}: unknown key" for k in mirror if k not in ("rewrite", "tools")]
+        return ([], {}, DEFAULT_PREFIX), [str(e)]
+    errors = [f"{k}: unknown key" for k in mirror if k not in ("prefix", "rewrite", "tools")]
+    prefix = mirror.get("prefix", DEFAULT_PREFIX)
+    if "prefix" in mirror and (err := prefix_error(prefix)):
+        errors.append(f"prefix: {err}")
+        prefix = DEFAULT_PREFIX
     rewrites = mirror.get("rewrite", [])
     if not isinstance(rewrites, list):
         errors.append("rewrite: must be an array of tables")
@@ -144,10 +163,23 @@ def load_mirror(f):
         errors += [f"tools.{name}.{e}" for e in errs]
         if not errs:
             overrides[name] = o
-    return (rules, overrides), errors
+    return (rules, overrides, prefix), errors
 
 
-def alias(f, rules=(), override=None):
+def read_prefix(mirror):
+    if mirror is None:
+        return DEFAULT_PREFIX, []
+    (_, _, prefix), errors = load_mirror(mirror)
+    return prefix, [f"{mirror}: {e}" for e in errors]
+
+
+def mirror_arg(parser):
+    default = pathlib.Path("mirror.toml")
+    parser.add_argument("--mirror", type=pathlib.Path, default=default if default.is_file() else None,
+                        help="fork config for the alias prefix (default: mirror.toml if present)")
+
+
+def alias(f, rules=(), override=None, prefix=DEFAULT_PREFIX):
     errors = []
     if not ALIAS_NAME.fullmatch(f.stem):
         errors.append(f"file name must match {ALIAS_NAME.pattern}.toml")
@@ -173,7 +205,7 @@ def alias(f, rules=(), override=None):
             errors.append(f"{'.'.join(path)}: {e}")
     if errors:
         return None, errors
-    return f'"{PREFIX}:{f.stem}" = \'\'\'{backend}[{",".join(opts)}]\'\'\'', []
+    return f'"{prefix}:{f.stem}" = \'\'\'{backend}[{",".join(opts)}]\'\'\'', []
 
 
 def toml_files(d):
@@ -194,23 +226,23 @@ def build(src, mirror=None):
         return None, [f"{src}: no *.toml files"]
     upstream_stems = {f.stem for f in upstream}
     errors = [f"{f}: also defined in {src / f.name}" for f in local if f.stem in upstream_stems]
-    rules, overrides = (), {}
+    rules, overrides, prefix = (), {}, DEFAULT_PREFIX
     sources = f"{src.name}/*.toml"
     if local:
         sources += f", {src.name}/{LOCAL}/*.toml"
     if mirror:
-        (rules, overrides), errs = load_mirror(mirror)
+        (rules, overrides, prefix), errs = load_mirror(mirror)
         errs += override_target_errors(overrides, upstream_stems, {f.stem for f in local}, src)
         errors += [f"{mirror}: {e}" for e in errs]
         sources += f" and {mirror.name}"
     aliases = []
     for f in upstream:
-        line, errs = alias(f, rules, overrides.get(f.stem))
+        line, errs = alias(f, rules, overrides.get(f.stem), prefix)
         aliases.append((f.name, line))
         errors += [f"{f}: {e}" for e in errs]
     # Local tools already point at internal URLs, so mirror rewrites never apply.
     for f in local:
-        line, errs = alias(f)
+        line, errs = alias(f, prefix=prefix)
         aliases.append((f.name, line))
         errors += [f"{f}: {e}" for e in errs]
     if errors:
