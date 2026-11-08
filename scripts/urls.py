@@ -1,7 +1,7 @@
 """Print the internet URLs to mirror for one tools/<name>.toml at a version."""
-import argparse, concurrent.futures, os, pathlib, re, subprocess, sys, tempfile, tomllib
+import argparse, concurrent.futures, pathlib, re, subprocess, sys, tomllib
 
-import build
+import build, sandbox
 
 PLATFORMS = (
     "linux-x64", "linux-arm64", "linux-x64-musl", "linux-arm64-musl",
@@ -34,36 +34,11 @@ def lock_urls(lock, name):
     ]
 
 
-def sandbox_env(root, proj):
-    # Inherited MISE_* (task context, url_replacements, global settings) would leak into the lock,
-    # and XDG_* would point mise's state at the caller's real directories.
-    env = {k: v for k, v in os.environ.items() if not k.startswith(("MISE_", "XDG_"))}
-    env.update(
-        HOME=str(root / "home"),
-        MISE_DATA_DIR=str(root / "data"),
-        MISE_CACHE_DIR=str(root / "cache"),
-        MISE_CONFIG_DIR=str(root / "config"),
-        MISE_STATE_DIR=str(root / "state"),
-        MISE_TRUSTED_CONFIG_PATHS=str(proj),
-    )
-    return env
-
-
 # A single 404 fails a multi-platform lock, and --dry-run reports no URLs, so each platform gets a real lock.
 def lock(text, name, version, platform):
-    with tempfile.TemporaryDirectory() as tmp:
-        # macOS temp dirs sit behind a /var -> /private/var symlink, which breaks the trust match.
-        root = pathlib.Path(tmp).resolve()
-        proj = root / "proj"
-        proj.mkdir()
-        (proj / "registry.toml").write_text(text, encoding="utf-8")
-        (proj / "mise.toml").write_text(
-            f'include = ["registry.toml"]\n[tools]\n"airgap:{name}" = "{version}"\n', encoding="utf-8"
-        )
-        (proj / "mise.lock").touch()
+    with sandbox.project(text, {f"airgap:{name}": version}) as (proj, env):
         result = subprocess.run(
-            ["mise", "lock", "--platform", platform],
-            cwd=proj, env=sandbox_env(root, proj), capture_output=True, text=True,
+            ["mise", "lock", "--platform", platform], cwd=proj, env=env, capture_output=True, text=True
         )
         if result.returncode:
             missing = NOT_FOUND.search(result.stderr)
@@ -77,20 +52,22 @@ def lock(text, name, version, platform):
 def main(argv):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("tool", help="name of a tools/<tool>.toml file")
-    parser.add_argument("version")
+    parser.add_argument("version", nargs="?", help="defaults to the tool's test_version")
     parser.add_argument("--tools", type=pathlib.Path, default=pathlib.Path("tools"))
     parser.add_argument("--platforms", default=",".join(PLATFORMS), help="comma-separated")
     args = parser.parse_args(argv[1:])
     if not build.ALIAS_NAME.fullmatch(args.tool):
         sys.exit(f"tool {args.tool!r} must match {build.ALIAS_NAME.pattern}")
-    if not VERSION.fullmatch(args.version):
-        sys.exit(f"version {args.version!r} must match {VERSION.pattern}")
     text, errors = registry(args.tools, args.tool)
     if errors:
         sys.exit("\n".join(errors))
     if not text:
         print(f"{args.tool} is a local tool ({args.tools / build.LOCAL}); nothing to mirror", file=sys.stderr)
         return
+    if args.version is None:
+        args.version = tomllib.loads((args.tools / f"{args.tool}.toml").read_text(encoding="utf-8"))["test_version"]
+    if not VERSION.fullmatch(args.version):
+        sys.exit(f"version {args.version!r} must match {VERSION.pattern}")
     platforms = [p for p in args.platforms.split(",") if p]
     with concurrent.futures.ThreadPoolExecutor() as pool:
         jobs = [pool.submit(lock, text, args.tool, args.version, p) for p in platforms]

@@ -101,6 +101,12 @@ class UrlsTest(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("tool 'local/x' must match", result.stderr)
 
+    def test_version_defaults_to_test_version(self):
+        log = self.root / "mise.log"
+        result = self.run_urls("x", "--platforms", "linux-x64", env={**self.env, "FAKE_MISE_LOG": str(log)})
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, "https://h/x-linux.tar.gz\n")
+
     def test_unknown_tool(self):
         result = self.run_urls("nope", "1.0.0")
         self.assertNotEqual(result.returncode, 0)

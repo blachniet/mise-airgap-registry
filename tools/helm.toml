@@ -1,5 +1,6 @@
 backend = "http:helm"
 test_version = "4.3.1"
+test_command = "helm version"
 url = "https://get.helm.sh/helm-v{{version}}-{{ os(macos='darwin') }}-{{ arch(x64='amd64') }}.tar.gz"
 strip_components = 1
 

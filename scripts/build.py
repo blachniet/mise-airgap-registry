@@ -7,7 +7,7 @@ ALIAS_NAME = re.compile(r"[a-z0-9][a-z0-9_-]*")
 BACKEND = re.compile(rf"http:{ALIAS_NAME.pattern}")
 BARE_KEY = re.compile(r"[A-Za-z0-9_-]+")
 CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f]")
-RESERVED = ("backend", "test_version")
+RESERVED = ("backend", "test_version", "test_command")
 LOCAL = "local"
 
 
@@ -159,6 +159,8 @@ def alias(f, rules=(), override=None):
     if backend and not BACKEND.fullmatch(backend):
         errors.append(f"backend: {backend!r} must match {BACKEND.pattern}")
     pop_string(spec, "test_version", errors)
+    if "test_command" in spec:
+        pop_string(spec, "test_command", errors)
     rewrite_urls(spec, rules)
     merge(spec, override or {})
     if not spec:
