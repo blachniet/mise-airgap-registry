@@ -1,4 +1,9 @@
-import os, pathlib, subprocess, sys, tempfile, unittest
+import os
+import pathlib
+import subprocess
+import sys
+import tempfile
+import unittest
 
 SCRIPT = pathlib.Path(__file__).resolve().parent.parent / "scripts" / "validate.py"
 
@@ -35,7 +40,11 @@ class ValidateTest(unittest.TestCase):
     def run_validate(self, tool, *args, **env):
         return subprocess.run(
             [sys.executable, SCRIPT, "--tools", self.tools, "--registry", self.registry, *args, tool],
-            capture_output=True, text=True, env={**self.env, **env}, cwd=self.root,
+            check=False,
+            capture_output=True,
+            text=True,
+            env={**self.env, **env},
+            cwd=self.root,
         )
 
     def calls(self):
@@ -45,10 +54,13 @@ class ValidateTest(unittest.TestCase):
         self.tool("x.toml", 'test_version = "1.0.0"\n')
         result = self.run_validate("x")
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(self.calls(), [
-            "['install'] \"airgap:x\" = \"1.0.0\"",
-            "['exec', '--', 'x', '--version'] \"airgap:x\" = \"1.0.0\"",
-        ])
+        self.assertEqual(
+            self.calls(),
+            [
+                '[\'install\'] "airgap:x" = "1.0.0"',
+                "['exec', '--', 'x', '--version'] \"airgap:x\" = \"1.0.0\"",
+            ],
+        )
 
     def test_prefix_from_mirror(self):
         self.tool("x.toml", 'test_version = "1.0.0"\n')
@@ -56,12 +68,12 @@ class ValidateTest(unittest.TestCase):
         mirror.write_text('prefix = "acme"\n', encoding="utf-8")
         result = self.run_validate("x", "--mirror", mirror)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(self.calls()[0], "['install'] \"acme:x\" = \"1.0.0\"")
+        self.assertEqual(self.calls()[0], '[\'install\'] "acme:x" = "1.0.0"')
 
     def test_invalid_prefix_in_mirror(self):
         self.tool("x.toml", 'test_version = "1.0.0"\n')
         mirror = self.root / "mirror.toml"
-        mirror.write_text('prefix = 1\n', encoding="utf-8")
+        mirror.write_text("prefix = 1\n", encoding="utf-8")
         result = self.run_validate("x", "--mirror", mirror)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("mirror.toml: prefix: must be a string", result.stderr)

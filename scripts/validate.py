@@ -1,7 +1,14 @@
 """Install one tool's test_version in a sandbox and run its test_command."""
-import argparse, pathlib, shlex, subprocess, sys, tomllib
 
-import build, sandbox
+import argparse
+import pathlib
+import shlex
+import subprocess
+import sys
+import tomllib
+
+import build
+import sandbox
 
 
 def spec_file(tools, name):
@@ -13,7 +20,7 @@ def spec_file(tools, name):
 
 def run(cmd, proj, env):
     print(f"$ {shlex.join(cmd)}", flush=True)
-    if subprocess.run(cmd, cwd=proj, env=env).returncode:
+    if subprocess.run(cmd, cwd=proj, env=env, check=False).returncode:
         sys.exit(f"failed: {shlex.join(cmd)}")
 
 
