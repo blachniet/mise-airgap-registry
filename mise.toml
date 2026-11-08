@@ -14,7 +14,7 @@ description = "Generate dist/mise.toml from tools/*.toml and mirror.toml"
 run = "uv run scripts/build.py tools dist/mise.toml mirror.toml"
 
 [tasks.lint]
-description = "Lint GitHub Actions workflows"
+description = "Run linters"
 run = "actionlint"
 
 [tasks.test]
