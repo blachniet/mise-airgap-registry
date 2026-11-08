@@ -12,7 +12,7 @@ description = "Generate dist/mise.toml from tools/*.toml and mirror.toml"
 run = "uv run scripts/build.py tools dist/mise.toml mirror.toml"
 
 [tasks.test]
-description = "Run build.py tests"
+description = "Run tests"
 run = "uv run python -m unittest discover tests"
 
 [tasks.urls]

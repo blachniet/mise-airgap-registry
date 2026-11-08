@@ -48,14 +48,11 @@ S=<scratchpad>/<name>sb; rm -rf $S; mkdir -p $S/proj; cp dist/mise.toml $S/proj/
 export HOME=$S/home MISE_DATA_DIR=$S/data MISE_CACHE_DIR=$S/cache MISE_CONFIG_DIR=$S/cfg MISE_TRUSTED_CONFIG_PATHS=$S/proj
 printf 'include = ["registry.toml"]\n[tools]\n"airgap:<name>" = "<ver>"\n' > mise.toml; touch mise.lock
 mise install && ls -l $S/data/installs/airgap-<name>/<ver>/ && mise exec -- <name> --version
-mise lock --platform linux-x64,linux-arm64,linux-x64-musl,linux-arm64-musl,macos-arm64,macos-x64,windows-x64,windows-arm64
-grep -o 'https://[^"]*' mise.lock | grep -v mise.jdx.dev | sort -u
+cd - && mise run urls <name> <ver>   # every platform; 404s reported as not published
 ```
 
 - Always use the isolated sandbox. Write `[tools]` by hand; **never `mise use 'airgap:x@v'`**. In mise 2026.11.x it fails with "Http backend requires 'url' option", and for a tool already in `[tools]` it inlines the registry's options into the project file.
-- Pass all 8 platforms to `mise lock`; the default skips windows-arm64. Drop platforms the tool doesn't publish.
-- A lock can list the tool more than once (`[[tools."airgap:x"]]`) when options differ per platform. That's expected.
-- A 404 during lock names the bad URL; fix the template or override.
+- `mise run urls` reports each 404 platform as not published. If the tool does publish that platform, fix the template or override.
 - Large downloads (vault) can exceed the default 2-minute Bash timeout; raise it.
 - Some tools phone home on `--version` (sops prints "(latest)"). Note that for the user.
 - Then in the repo: `mise run build` and `mise run test`. If `dist/mise.toml` breaks, every mise command fails; recover with `uv run scripts/build.py tools dist/mise.toml mirror.toml` or `git checkout dist/`.

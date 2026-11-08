@@ -299,16 +299,20 @@ class MirrorTest(BuildTest):
         self.assertEqual(opts["bin"], "https://github.com/not-a-url-key")
         self.assertEqual(opts["platforms"]["windows-x64"]["url"], "https://m.example/gh/o/r/w")
 
-    def test_regex_rewrite_replaces_first_match_literally(self):
+    def test_rewrite_matches_prefix_only(self):
         opts = self.built(
-            """url = "https://h.example/p/{{version}}/p_{{version}}.zip"\n""",
+            """\
+            url = "https://h.example/p?mirror=https://h.example/p"
+            version_list_url = "http://other/https://h.example/"
+            """,
             """\
             [[rewrite]]
-            from = 'regex:^https://h\\.example/[^/]+/[^/]+/'
-            to = 'https://m.example/dl/\\1$1/'
+            from = "https://h.example/"
+            to = "https://m.example/"
             """,
         )
-        self.assertEqual(opts["url"], "https://m.example/dl/\\1$1/p_{{version}}.zip")
+        self.assertEqual(opts["url"], "https://m.example/p?mirror=https://h.example/p")
+        self.assertEqual(opts["version_list_url"], "http://other/https://h.example/")
 
     def test_first_changing_rule_wins(self):
         opts = self.built(
@@ -375,7 +379,6 @@ class MirrorTest(BuildTest):
             "rewrite = 1\n": "rewrite: must be an array of tables",
             "[[rewrite]]\nfrom = 'a'\n": "rewrite[0]: must have exactly the keys from and to",
             "[[rewrite]]\nfrom = ''\nto = 'b'\n": "rewrite[0]: from must be a non-empty string",
-            "[[rewrite]]\nfrom = 'regex:('\nto = 'b'\n": "rewrite[0]: invalid regex",
             "tools = 1\n": "tools: must be a table",
             "[tools]\nx = 1\n": "tools.x: must be a table",
             "[tools.x]\nbackend = 'http:y'\n": "tools.x.backend: set it in tools/x.toml",

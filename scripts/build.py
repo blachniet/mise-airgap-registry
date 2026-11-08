@@ -7,7 +7,6 @@ ALIAS_NAME = re.compile(r"[a-z0-9][a-z0-9_-]*")
 BACKEND = re.compile(rf"http:{ALIAS_NAME.pattern}")
 BARE_KEY = re.compile(r"[A-Za-z0-9_-]+")
 CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f]")
-REGEX_PREFIX = "regex:"
 RESERVED = ("backend", "test_version")
 LOCAL = "local"
 
@@ -104,14 +103,7 @@ def rule(r):
     if not (isinstance(src, str) and src) or not isinstance(to, str):
         raise SpecError("from must be a non-empty string and to a string")
     quote(to)
-    if not src.startswith(REGEX_PREFIX):
-        return lambda url: url.replace(src, to)
-    try:
-        pattern = re.compile(src[len(REGEX_PREFIX):])
-    except re.error as e:
-        raise SpecError(f"invalid regex: {e}")
-    # A function replacement keeps `to` literal: no backreferences or escapes.
-    return lambda url: pattern.sub(lambda m: to, url, count=1)
+    return lambda url: to + url[len(src):] if url.startswith(src) else url
 
 
 def override_errors(o):

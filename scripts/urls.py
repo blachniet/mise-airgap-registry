@@ -49,6 +49,7 @@ def sandbox_env(root, proj):
     return env
 
 
+# A single 404 fails a multi-platform lock, and --dry-run reports no URLs, so each platform gets a real lock.
 def lock(text, name, version, platform):
     with tempfile.TemporaryDirectory() as tmp:
         # macOS temp dirs sit behind a /var -> /private/var symlink, which breaks the trust match.

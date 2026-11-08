@@ -79,7 +79,7 @@ from = "https://github.com/"
 to = "https://registry.example.com/github.com/"
 
 [[rewrite]]
-from = "regex:^https://releases\\.hashicorp\\.com/"
+from = "https://releases.hashicorp.com/"
 to = "https://registry.example.com/hashicorp/"
 
 # Override any option for a single tool
@@ -91,7 +91,7 @@ url = "https://registry.example.com/sops/v{{version}}/sops.{{ os(macos='darwin')
 mise run build
 ```
 
-Rules apply in order to every URL option (`url`, `platforms.*.url`, `*_url`), and the first rule that matches wins. See the comments in `mirror.toml` for details.
+Each rule replaces a URL prefix. Rules apply in order to every URL option (`url`, `platforms.*.url`, `*_url`), and the first rule that matches wins. See the comments in `mirror.toml` for details.
 
 ### Add internal tools
 

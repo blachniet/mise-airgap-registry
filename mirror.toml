@@ -4,10 +4,9 @@
 # Rules and overrides don't apply to tools/local/*.toml.
 #
 # [[rewrite]] rules apply to every `url` and `*_url` option, including
-# platforms.*.url. A plain `from` replaces every occurrence; a `regex:` from
-# replaces the first match. `to` is literal (no backreferences). Rules apply in
-# order and the first one that changes a URL wins. Rules see the Tera template
-# text, not the rendered URL.
+# platforms.*.url. A rule replaces `from` with `to` when the URL starts with
+# `from`. Rules apply in order and the first one that matches wins. Rules see
+# the Tera template text, not the rendered URL.
 #
 # Keep the version in the internal path. Some file names have none (jq, uv,
 # terragrunt), so a flat <host>/downloads/<file> layout mixes up versions.
@@ -17,7 +16,7 @@
 # to = "https://registry.example.com/github.com/"
 #
 # [[rewrite]]
-# from = "regex:^https://releases\\.hashicorp\\.com/[^/]+/[^/]+/"
+# from = "https://releases.hashicorp.com/"
 # to = "https://registry.example.com/hashicorp/"
 #
 # [tools.<name>] merges over tools/<name>.toml after rewrites, for anything a
