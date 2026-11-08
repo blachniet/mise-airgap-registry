@@ -48,6 +48,26 @@ See [`tools/`](tools/) for the available tools.
 > [!IMPORTANT]
 > Add tools by editing `[tools]` directly. `mise use 'airgap:<tool>@<version>'` currently fails, or copies the tool's settings into your `mise.toml`.
 
+### Pin by digest from an OCI registry
+
+Each release also publishes the registry as an OCI artifact, which mise includes with `oci::`. Pin the digest listed in the release notes: [paranoid mode](https://mise.jdx.dev/paranoid.html#remote-includes) requires it, and mise never refetches a digest.
+
+```toml
+include = ["oci::<REGISTRY>/<IMAGE>@sha256:<DIGEST>"]
+```
+
+For example, the upstream registry is `oci::ghcr.io/blachniet/mise-airgap-registry@sha256:<DIGEST>`. If your air gap can't reach that registry, copy the artifact to an internal one (`oras copy` or `crane copy`) and use that name. The digest stays the same. If your internal registry only speaks plain HTTP (loopback hosts always work), list its host in mise's `oci.insecure_registries` setting (env `MISE_OCI_INSECURE_REGISTRIES`).
+
+### Use the zip
+
+`registry-<TAG>.zip` on the release page contains only `mise.toml`. mise has no `zip::` include, so the zip is a transport format: move it into the air gap, unpack it, and include the local file.
+
+```toml
+include = ["/opt/mise-airgap/mise.toml"]
+```
+
+Or serve the unpacked file from an internal Git repository and use the `git::` include above. Paranoid mode rejects local includes; use the OCI digest or `git::...?ref=<sha>` there instead.
+
 ### Troubleshooting
 
 - **`airgap is not a valid plugin name`** (or your fork's prefix): mise didn't load the registry. Check the `include` line in your `mise.toml`.
@@ -143,6 +163,19 @@ strip_components = 1
 [platforms.windows-x64]
 url = "https://github.com/FiloSottile/age/releases/download/v{{version}}/age-v{{version}}-windows-amd64.zip"
 ```
+
+### Cut a release
+
+```sh
+git tag vX.Y.Z && git push origin vX.Y.Z
+```
+
+The `v*` tag triggers [`release.yml`](.github/workflows/release.yml), which checks that `dist/mise.toml` is current and then publishes:
+
+- a GitHub release with `registry-vX.Y.Z.zip` (only `mise.toml`) attached,
+- an OCI artifact at `ghcr.io/<owner>/<repo>:vX.Y.Z` (lowercased), whose digest is in the release notes.
+
+Releases only come from commits on `main`. Forks publish to their own namespace with no workflow changes, but GHCR packages start private: after the first release, set the package's visibility to public in its GitHub package settings (once per package), otherwise consumers must authenticate (`oras login`). Run `mise run package vX.Y.Z` to write the zip to `release/` locally. mise reads `mise.toml` from the unpacked artifact, so the layer must be titled `mise.toml`.
 
 ### Build and test
 
