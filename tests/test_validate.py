@@ -32,10 +32,10 @@ class ValidateTest(unittest.TestCase):
     def tool(self, path, body):
         (self.tools / path).write_text(body, encoding="utf-8")
 
-    def run_validate(self, tool, **env):
+    def run_validate(self, tool, *args, **env):
         return subprocess.run(
-            [sys.executable, SCRIPT, "--tools", self.tools, "--registry", self.registry, tool],
-            capture_output=True, text=True, env={**self.env, **env},
+            [sys.executable, SCRIPT, "--tools", self.tools, "--registry", self.registry, *args, tool],
+            capture_output=True, text=True, env={**self.env, **env}, cwd=self.root,
         )
 
     def calls(self):
@@ -49,6 +49,23 @@ class ValidateTest(unittest.TestCase):
             "['install'] \"airgap:x\" = \"1.0.0\"",
             "['exec', '--', 'x', '--version'] \"airgap:x\" = \"1.0.0\"",
         ])
+
+    def test_prefix_from_mirror(self):
+        self.tool("x.toml", 'test_version = "1.0.0"\n')
+        mirror = self.root / "mirror.toml"
+        mirror.write_text('prefix = "acme"\n', encoding="utf-8")
+        result = self.run_validate("x", "--mirror", mirror)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.calls()[0], "['install'] \"acme:x\" = \"1.0.0\"")
+
+    def test_invalid_prefix_in_mirror(self):
+        self.tool("x.toml", 'test_version = "1.0.0"\n')
+        mirror = self.root / "mirror.toml"
+        mirror.write_text('prefix = 1\n', encoding="utf-8")
+        result = self.run_validate("x", "--mirror", mirror)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("mirror.toml: prefix: must be a string", result.stderr)
+        self.assertFalse(self.log.exists())
 
     def test_custom_command_and_local_tool(self):
         self.tool("local/y.toml", 'test_version = "2"\ntest_command = "why version --client"\n')
