@@ -1,0 +1,10 @@
+backend = "http:taplo"
+test_version = "0.10.0"
+url = "https://github.com/tamasfe/taplo/releases/download/{{version}}/taplo-{{ os(macos='darwin') }}-{{ arch(x64='x86_64', arm64='aarch64') }}.gz"
+bin = "taplo"
+
+[platforms.windows-x64]
+bin = "taplo.exe"
+
+[platforms.windows-arm64]
+bin = "taplo.exe"
