@@ -252,10 +252,159 @@ class RoundTripTest(BuildTest):
         self.assertEqual(opts, stringify(expected))
 
 
+class MirrorTest(BuildTest):
+    def mirror(self, body):
+        f = self.root / "mirror.toml"
+        f.write_text(textwrap.dedent(body), encoding="utf-8")
+        return f
+
+    def built(self, tool, mirror):
+        self.write("x.toml", HEAD + textwrap.dedent(tool))
+        text, errors = build.build(self.tools, self.mirror(mirror))
+        self.assertEqual(errors, [])
+        backend = tomllib.loads(text)["tool_alias"]["airgap:x"]
+        return tomllib.loads(f"t = {{{backend[len('http:x['):-1]}}}")["t"]
+
+    def mirror_errors(self, mirror, tool='url = "u"'):
+        self.write("x.toml", HEAD + tool)
+        text, errors = build.build(self.tools, self.mirror(mirror))
+        self.assertIsNone(text)
+        return errors
+
+    def test_empty_mirror_changes_only_header(self):
+        self.write("x.toml", HEAD + 'url = "https://a"\n')
+        plain, _ = build.build(self.tools)
+        mirrored, errors = build.build(self.tools, self.mirror("# nothing\n"))
+        self.assertEqual(errors, [])
+        self.assertEqual(mirrored.splitlines()[1:], plain.splitlines()[1:])
+        self.assertEqual(mirrored.splitlines()[0], "# @generated from tools/*.toml and mirror.toml - do not edit")
+
+    def test_plain_rewrite_applies_to_all_url_keys(self):
+        opts = self.built(
+            """\
+            url = "https://github.com/o/r/a"
+            version_list_url = "https://github.com/o/r/tags"
+            bin = "https://github.com/not-a-url-key"
+            [platforms.windows-x64]
+            url = "https://github.com/o/r/w"
+            """,
+            """\
+            [[rewrite]]
+            from = "https://github.com/"
+            to = "https://m.example/gh/"
+            """,
+        )
+        self.assertEqual(opts["url"], "https://m.example/gh/o/r/a")
+        self.assertEqual(opts["version_list_url"], "https://m.example/gh/o/r/tags")
+        self.assertEqual(opts["bin"], "https://github.com/not-a-url-key")
+        self.assertEqual(opts["platforms"]["windows-x64"]["url"], "https://m.example/gh/o/r/w")
+
+    def test_regex_rewrite_replaces_first_match_literally(self):
+        opts = self.built(
+            """url = "https://h.example/p/{{version}}/p_{{version}}.zip"\n""",
+            """\
+            [[rewrite]]
+            from = 'regex:^https://h\\.example/[^/]+/[^/]+/'
+            to = 'https://m.example/dl/\\1$1/'
+            """,
+        )
+        self.assertEqual(opts["url"], "https://m.example/dl/\\1$1/p_{{version}}.zip")
+
+    def test_first_changing_rule_wins(self):
+        opts = self.built(
+            'url = "https://a.example/x"\n',
+            """\
+            [[rewrite]]
+            from = "https://nomatch/"
+            to = "https://never/"
+            [[rewrite]]
+            from = "https://a.example/"
+            to = "https://b.example/"
+            [[rewrite]]
+            from = "https://b.example/"
+            to = "https://c.example/"
+            """,
+        )
+        self.assertEqual(opts["url"], "https://b.example/x")
+
+    def test_tool_override_merges_after_rewrite(self):
+        opts = self.built(
+            """\
+            url = "https://github.com/o/r/a"
+            strip_components = 1
+            [platforms.windows-x64]
+            url = "https://github.com/o/r/w"
+            """,
+            """\
+            [[rewrite]]
+            from = "https://github.com/"
+            to = "https://m.example/"
+            [tools.x]
+            url = "https://github.com/kept/as/written"
+            [tools.x.platforms.linux-x64]
+            url = "https://m.example/l"
+            """,
+        )
+        self.assertEqual(opts["url"], "https://github.com/kept/as/written")
+        self.assertEqual(opts["strip_components"], "1")
+        self.assertEqual(opts["platforms"]["windows-x64"]["url"], "https://m.example/o/r/w")
+        self.assertEqual(opts["platforms"]["linux-x64"]["url"], "https://m.example/l")
+
+    def test_override_values_are_attributed_to_mirror(self):
+        errors = self.mirror_errors(
+            "[tools.x]\nurl = \"a'''b\"\n[tools.x.platforms.linux-x64]\nurl = 1.5\n"
+        )
+        self.assertEqual(len(errors), 2, errors)
+        self.assertIn("mirror.toml: tools.x.url: ''' cannot appear", errors[0])
+        self.assertIn("mirror.toml: tools.x.platforms.linux-x64.url: unsupported value type float", errors[1])
+
+    def test_rewrite_target_is_validated(self):
+        errors = self.mirror_errors("[[rewrite]]\nfrom = 'u'\nto = \"a'''b\"\n")
+        self.assertEqual(len(errors), 1, errors)
+        self.assertIn("mirror.toml: rewrite[0]: ''' cannot appear", errors[0])
+
+    def test_mirror_and_tool_errors_are_collected_together(self):
+        errors = self.mirror_errors("nope = 1\n", tool="")
+        self.assertEqual(len(errors), 2, errors)
+        self.assertIn("mirror.toml: nope: unknown key", errors[0])
+        self.assertIn("x.toml: no backend options", errors[1])
+
+    def test_mirror_errors(self):
+        cases = {
+            "nope = 1\n": "mirror.toml: nope: unknown key",
+            "rewrite = 1\n": "rewrite: must be an array of tables",
+            "[[rewrite]]\nfrom = 'a'\n": "rewrite[0]: must have exactly the keys from and to",
+            "[[rewrite]]\nfrom = ''\nto = 'b'\n": "rewrite[0]: from must be a non-empty string",
+            "[[rewrite]]\nfrom = 'regex:('\nto = 'b'\n": "rewrite[0]: invalid regex",
+            "tools = 1\n": "tools: must be a table",
+            "[tools]\nx = 1\n": "tools.x: must be a table",
+            "[tools.x]\nbackend = 'http:y'\n": "tools.x.backend: set it in tools/x.toml",
+            "[tools.x]\ntest_version = '2'\n": "tools.x.test_version: set it in tools/x.toml",
+            "[tools.y]\nurl = 'u'\n": "tools.y: no tools/y.toml",
+            "x = [\n": "mirror.toml: ",
+        }
+        for body, expected in cases.items():
+            with self.subTest(body=body):
+                errors = self.mirror_errors(body)
+                self.assertEqual(len(errors), 1, errors)
+                self.assertIn(expected, errors[0])
+
+    def test_collects_mirror_errors(self):
+        errors = self.mirror_errors("nope = 1\n[[rewrite]]\nfrom = 'a'\n")
+        self.assertEqual(len(errors), 2, errors)
+
+    def test_missing_mirror_file(self):
+        self.write("x.toml", HEAD + 'url = "u"')
+        text, errors = build.build(self.tools, self.root / "absent.toml")
+        self.assertIsNone(text)
+        self.assertEqual(len(errors), 1, errors)
+        self.assertIn("absent.toml", errors[0])
+
+
 class CliTest(BuildTest):
-    def run_build(self, out, env=None):
+    def run_build(self, out, env=None, *extra):
         return subprocess.run(
-            [sys.executable, SCRIPT, self.tools, out], capture_output=True, text=True, env=env
+            [sys.executable, SCRIPT, self.tools, out, *extra], capture_output=True, text=True, env=env
         )
 
     def test_writes_utf8_under_non_utf8_locale(self):
@@ -289,6 +438,15 @@ class CliTest(BuildTest):
         self.assertIn("x.toml: backend: required", result.stderr)
         self.assertIn("x.toml: test_version: required", result.stderr)
         self.assertFalse(out.exists())
+
+    def test_mirror_argument(self):
+        self.write("x.toml", HEAD + 'url = "https://a/x"')
+        mirror = self.root / "mirror.toml"
+        mirror.write_text('[[rewrite]]\nfrom = "https://a/"\nto = "https://b/"\n', encoding="utf-8")
+        out = self.root / "mise.toml"
+        result = self.run_build(out, None, mirror)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("url='https://b/x'", out.read_text(encoding="utf-8"))
 
     def test_usage(self):
         result = subprocess.run([sys.executable, SCRIPT], capture_output=True, text=True)

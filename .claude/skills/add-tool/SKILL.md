@@ -5,7 +5,7 @@ description: Add a new tools/<name>.toml entry to this airgap registry. Discover
 
 # Add a tool to the airgap registry
 
-Each `tools/<name>.toml` becomes alias `airgap:<name>` in `dist/mise.toml` (committed, built by `mise run build`). See `tools/*.toml` for working examples of every pattern below.
+Each `tools/<name>.toml` becomes alias `airgap:<name>` in `dist/mise.toml` (committed, built by `mise run build`). `tools/*.toml` always hold the internet URLs; forks map them to internal locations in `mirror.toml`, never in `tools/`. See `tools/*.toml` for working examples of every pattern below.
 
 ## 1. Discover
 
@@ -43,7 +43,7 @@ url = "https://.../<name>_windows_amd64.zip"
 ## 3. Verify
 
 ```sh
-uv run scripts/build.py tools dist/mise.toml   # or: mise run build
+uv run scripts/build.py tools dist/mise.toml mirror.toml   # or: mise run build
 S=<scratchpad>/<name>sb; rm -rf $S; mkdir -p $S/proj; cp dist/mise.toml $S/proj/registry.toml; cd $S/proj
 export HOME=$S/home MISE_DATA_DIR=$S/data MISE_CACHE_DIR=$S/cache MISE_CONFIG_DIR=$S/cfg MISE_TRUSTED_CONFIG_PATHS=$S/proj
 printf 'include = ["registry.toml"]\n[tools]\n"airgap:<name>" = "<ver>"\n' > mise.toml; touch mise.lock
@@ -58,7 +58,7 @@ grep -o 'https://[^"]*' mise.lock | grep -v mise.jdx.dev | sort -u
 - A 404 during lock names the bad URL; fix the template or override.
 - Large downloads (vault) can exceed the default 2-minute Bash timeout; raise it.
 - Some tools phone home on `--version` (sops prints "(latest)"). Note that for the user.
-- Then in the repo: `mise run build` and `mise run test`. If `dist/mise.toml` breaks, every mise command fails; recover with `uv run scripts/build.py tools dist/mise.toml` or `git checkout dist/`.
+- Then in the repo: `mise run build` and `mise run test`. If `dist/mise.toml` breaks, every mise command fails; recover with `uv run scripts/build.py tools dist/mise.toml mirror.toml` or `git checkout dist/`.
 
 ## 4. Finish
 

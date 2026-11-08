@@ -2,11 +2,13 @@
 import pathlib, re, sys, tomllib
 
 PREFIX = "airgap"
-HEADER = "# @generated from tools/*.toml - do not edit"
+HEADER = "# @generated from {} - do not edit"
 ALIAS_NAME = re.compile(r"[a-z0-9][a-z0-9_-]*")
 BACKEND = re.compile(rf"http:{ALIAS_NAME.pattern}")
 BARE_KEY = re.compile(r"[A-Za-z0-9_-]+")
 CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f]")
+REGEX_PREFIX = "regex:"
+RESERVED = ("backend", "test_version")
 
 
 class SpecError(Exception):
@@ -66,7 +68,93 @@ def pop_string(spec, name, errors):
         return v
 
 
-def alias(f):
+def is_url_key(k):
+    return k == "url" or k.endswith("_url")
+
+
+def rewrite_url(url, rules):
+    for apply in rules:
+        new = apply(url)
+        if new != url:
+            return new
+    return url
+
+
+def rewrite_urls(spec, rules):
+    for k, v in spec.items():
+        if isinstance(v, dict):
+            rewrite_urls(v, rules)
+        elif isinstance(v, str) and is_url_key(k):
+            spec[k] = rewrite_url(v, rules)
+
+
+def merge(base, override):
+    for k, v in override.items():
+        if isinstance(v, dict) and isinstance(base.get(k), dict):
+            merge(base[k], v)
+        else:
+            base[k] = v
+
+
+def rule(r):
+    if not isinstance(r, dict) or set(r) != {"from", "to"}:
+        raise SpecError("must have exactly the keys from and to")
+    src, to = r["from"], r["to"]
+    if not (isinstance(src, str) and src) or not isinstance(to, str):
+        raise SpecError("from must be a non-empty string and to a string")
+    quote(to)
+    if not src.startswith(REGEX_PREFIX):
+        return lambda url: url.replace(src, to)
+    try:
+        pattern = re.compile(src[len(REGEX_PREFIX):])
+    except re.error as e:
+        raise SpecError(f"invalid regex: {e}")
+    # A function replacement keeps `to` literal: no backreferences or escapes.
+    return lambda url: pattern.sub(lambda m: to, url, count=1)
+
+
+def override_errors(o):
+    for path, v in flatten(o):
+        try:
+            key(path), value(v)
+        except SpecError as e:
+            yield f"{'.'.join(path)}: {e}"
+
+
+def load_mirror(f):
+    try:
+        mirror = tomllib.loads(f.read_text(encoding="utf-8"))
+    except (OSError, tomllib.TOMLDecodeError, UnicodeDecodeError) as e:
+        return ([], {}), [str(e)]
+    errors = [f"{k}: unknown key" for k in mirror if k not in ("rewrite", "tools")]
+    rewrites = mirror.get("rewrite", [])
+    if not isinstance(rewrites, list):
+        errors.append("rewrite: must be an array of tables")
+        rewrites = []
+    rules = []
+    for i, r in enumerate(rewrites):
+        try:
+            rules.append(rule(r))
+        except SpecError as e:
+            errors.append(f"rewrite[{i}]: {e}")
+    tables = mirror.get("tools", {})
+    if not isinstance(tables, dict):
+        errors.append("tools: must be a table")
+        tables = {}
+    overrides = {}
+    for name, o in tables.items():
+        if not isinstance(o, dict):
+            errors.append(f"tools.{name}: must be a table")
+            continue
+        errs = [f"{k}: set it in tools/{name}.toml" for k in RESERVED if k in o]
+        errs += override_errors(o)
+        errors += [f"tools.{name}.{e}" for e in errs]
+        if not errs:
+            overrides[name] = o
+    return (rules, overrides), errors
+
+
+def alias(f, rules=(), override=None):
     errors = []
     if not ALIAS_NAME.fullmatch(f.stem):
         errors.append(f"file name must match {ALIAS_NAME.pattern}.toml")
@@ -78,6 +166,8 @@ def alias(f):
     if backend and not BACKEND.fullmatch(backend):
         errors.append(f"backend: {backend!r} must match {BACKEND.pattern}")
     pop_string(spec, "test_version", errors)
+    rewrite_urls(spec, rules)
+    merge(spec, override or {})
     if not spec:
         errors.append("no backend options")
     opts = []
@@ -91,13 +181,21 @@ def alias(f):
     return f'"{PREFIX}:{f.stem}" = \'\'\'{backend}[{",".join(opts)}]\'\'\'', []
 
 
-def build(src):
+def build(src, mirror=None):
     files = sorted(f for f in src.glob("*.toml") if f.is_file())
     if not files:
         return None, [f"{src}: no *.toml files"]
-    lines, errors = [HEADER, "[tool_alias]"], []
+    rules, overrides, errors = (), {}, []
+    sources = f"{src.name}/*.toml"
+    if mirror:
+        (rules, overrides), errs = load_mirror(mirror)
+        stems = {f.stem for f in files}
+        errs += [f"tools.{n}: no {src.name}/{n}.toml" for n in overrides if n not in stems]
+        errors = [f"{mirror}: {e}" for e in errs]
+        sources += f" and {mirror.name}"
+    lines = [HEADER.format(sources), "[tool_alias]"]
     for f in files:
-        line, errs = alias(f)
+        line, errs = alias(f, rules, overrides.get(f.stem))
         lines.append(line)
         errors += [f"{f}: {e}" for e in errs]
     if errors:
@@ -106,10 +204,11 @@ def build(src):
 
 
 def main(argv):
-    if len(argv) != 3:
-        sys.exit(f"usage: {argv[0]} <tools-dir> <output>")
+    if len(argv) not in (3, 4):
+        sys.exit(f"usage: {argv[0]} <tools-dir> <output> [<mirror.toml>]")
     src, out = pathlib.Path(argv[1]), pathlib.Path(argv[2])
-    text, errors = build(src)
+    mirror = pathlib.Path(argv[3]) if len(argv) == 4 else None
+    text, errors = build(src, mirror)
     if errors:
         sys.exit("\n".join(errors))
     out.parent.mkdir(parents=True, exist_ok=True)

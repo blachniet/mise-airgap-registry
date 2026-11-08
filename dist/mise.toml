@@ -1,4 +1,4 @@
-# @generated from tools/*.toml - do not edit
+# @generated from tools/*.toml and mirror.toml - do not edit
 [tool_alias]
 "airgap:age" = '''http:age[url="https://github.com/FiloSottile/age/releases/download/v{{version}}/age-v{{version}}-{{ os(macos='darwin') }}-{{ arch(x64='amd64') }}.tar.gz",strip_components='1',platforms.windows-x64.url='https://github.com/FiloSottile/age/releases/download/v{{version}}/age-v{{version}}-windows-amd64.zip']'''
 "airgap:bat" = '''http:bat[url="https://github.com/sharkdp/bat/releases/download/v{{version}}/bat-v{{version}}-{{ arch(x64='x86_64', arm64='aarch64') }}-{{ os(linux='unknown-linux-' ~ libc(), macos='apple-darwin') }}.tar.gz",strip_components='1',platforms.windows-x64.url='https://github.com/sharkdp/bat/releases/download/v{{version}}/bat-v{{version}}-x86_64-pc-windows-msvc.zip',platforms.windows-arm64.url='https://github.com/sharkdp/bat/releases/download/v{{version}}/bat-v{{version}}-aarch64-pc-windows-msvc.zip']'''

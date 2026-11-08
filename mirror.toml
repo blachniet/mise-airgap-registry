@@ -1,0 +1,26 @@
+# Fork-owned mapping from internet URLs to where this airgap serves them.
+# Upstream leaves this empty: artifacts are served at their internet URLs.
+# tools/*.toml always keep the internet URLs; edit only this file in a fork.
+#
+# [[rewrite]] rules apply to every `url` and `*_url` option, including
+# platforms.*.url. A plain `from` replaces every occurrence; a `regex:` from
+# replaces the first match. `to` is literal (no backreferences). Rules apply in
+# order and the first one that changes a URL wins. Rules see the Tera template
+# text, not the rendered URL.
+#
+# Keep the version in the internal path. Some file names have none (jq, uv,
+# terragrunt), so a flat <host>/downloads/<file> layout mixes up versions.
+#
+# [[rewrite]]
+# from = "https://github.com/"
+# to = "https://registry.example.com/github.com/"
+#
+# [[rewrite]]
+# from = "regex:^https://releases\\.hashicorp\\.com/[^/]+/[^/]+/"
+# to = "https://registry.example.com/hashicorp/"
+#
+# [tools.<name>] merges over tools/<name>.toml after rewrites, for anything a
+# rule can't express. Its URLs are used as written, not rewritten.
+#
+# [tools.sops]
+# url = "https://registry.example.com/sops/v{{version}}/sops.{{ os(macos='darwin') }}.{{ arch(x64='amd64') }}"
