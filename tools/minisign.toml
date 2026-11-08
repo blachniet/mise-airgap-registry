@@ -1,5 +1,6 @@
 backend = "http:minisign"
 test_version = "0.12"
+test_command = "minisign -v"
 url = "https://github.com/jedisct1/minisign/releases/download/{{version}}/minisign-{{version}}-linux.tar.gz"
 strip_components = 1
 bin_path = "x86_64"

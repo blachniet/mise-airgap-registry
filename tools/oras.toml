@@ -1,5 +1,6 @@
 backend = "http:oras"
 test_version = "1.3.6"
+test_command = "oras version"
 url = "https://github.com/oras-project/oras/releases/download/v{{version}}/oras_{{version}}_{{ os(macos='darwin') }}_{{ arch(x64='amd64') }}.tar.gz"
 
 [platforms.windows-x64]
