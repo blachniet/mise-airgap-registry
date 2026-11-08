@@ -1,0 +1,114 @@
+import os, pathlib, subprocess, sys, tempfile, textwrap, unittest
+
+ROOT = pathlib.Path(__file__).resolve().parent.parent
+SCRIPT = ROOT / "scripts" / "urls.py"
+sys.path.insert(0, str(SCRIPT.parent))
+import urls
+
+FAKE_MISE = """\
+#!/usr/bin/env python3
+import os, pathlib, sys
+platform = sys.argv[sys.argv.index("--platform") + 1]
+log = os.environ.get("FAKE_MISE_LOG")
+if log:
+    with open(log, "a") as f:
+        f.write(" ".join(f"{k}={v}" for k, v in sorted(os.environ.items()) if k.startswith("MISE_")) + "\\n")
+if platform == "windows-arm64":
+    sys.exit("mise ERROR HTTP status client error (404 Not Found) for url (https://h/x-windows-arm64.zip)")
+if platform == "macos-x64":
+    sys.exit("mise ERROR something else broke")
+url = "https://h/x-linux.tar.gz" if platform.startswith("linux") else f"https://h/x-{platform}.zip"
+pathlib.Path("mise.lock").write_text(
+    f'[[tools."airgap:x"]]\\nversion = "1.0.0"\\n'
+    f'[tools."airgap:x"."platforms.{platform}"]\\nurl = "{url}"\\n'
+)
+"""
+
+
+class UrlsTest(unittest.TestCase):
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.root = pathlib.Path(tmp.name)
+        self.tools = self.root / "tools"
+        self.tools.mkdir()
+        (self.tools / "x.toml").write_text(
+            'backend = "http:x"\ntest_version = "1.0.0"\nurl = "https://h/x-{{ os() }}"\n', encoding="utf-8"
+        )
+        bin_dir = self.root / "bin"
+        bin_dir.mkdir()
+        mise = bin_dir / "mise"
+        mise.write_text(FAKE_MISE, encoding="utf-8")
+        mise.chmod(0o755)
+        self.env = {**os.environ, "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}"}
+
+    def run_urls(self, *args, env=None):
+        return subprocess.run(
+            [sys.executable, SCRIPT, "--tools", self.tools, *args],
+            capture_output=True, text=True, env=env or self.env,
+        )
+
+    def test_dedupes_and_sorts_urls_and_reports_unpublished(self):
+        result = self.run_urls("x", "1.0.0", "--platforms", "windows-x64,linux-x64,linux-x64-musl,windows-arm64")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, "https://h/x-linux.tar.gz\nhttps://h/x-windows-x64.zip\n")
+        self.assertIn("windows-arm64: not published (https://h/x-windows-arm64.zip returned 404)", result.stderr)
+
+    def test_other_lock_failures_are_fatal(self):
+        result = self.run_urls("x", "1.0.0", "--platforms", "linux-x64,macos-x64")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("macos-x64: mise lock failed", result.stderr)
+        self.assertIn("something else broke", result.stderr)
+        self.assertEqual(result.stdout, "")
+
+    def test_all_unpublished_is_an_error(self):
+        result = self.run_urls("x", "1.0.0", "--platforms", "windows-arm64")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("no URLs for x 1.0.0", result.stderr)
+
+    def test_sandboxes_mise_env(self):
+        log = self.root / "mise.log"
+        env = {**self.env, "FAKE_MISE_LOG": str(log), "MISE_URL_REPLACEMENTS": '{"a":"b"}'}
+        result = self.run_urls("x", "1.0.0", "--platforms", "linux-x64", env=env)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        seen = log.read_text()
+        self.assertNotIn("MISE_URL_REPLACEMENTS", seen)
+        self.assertIn("MISE_TRUSTED_CONFIG_PATHS=", seen)
+        self.assertNotIn(str(pathlib.Path.home()), seen)
+
+    def test_unknown_tool(self):
+        result = self.run_urls("nope", "1.0.0")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("nope.toml: no such tool", result.stderr)
+
+    def test_invalid_tool_file(self):
+        (self.tools / "bad.toml").write_text('url = "u"\n', encoding="utf-8")
+        result = self.run_urls("bad", "1.0.0")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("bad.toml: backend: required", result.stderr)
+
+    def test_rejects_unsafe_version(self):
+        result = self.run_urls("x", '1"\n[x]')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("must match", result.stderr)
+
+    def test_uses_internet_urls_from_tool_file(self):
+        text, errors = urls.registry(self.tools, "x")
+        self.assertEqual(errors, [])
+        self.assertEqual(text, "[tool_alias]\n\"airgap:x\" = '''http:x[url='https://h/x-{{ os() }}']'''\n")
+
+    def test_lock_urls_reads_every_entry(self):
+        lock = {
+            "tools": {
+                "airgap:x": [
+                    {"version": "1", "platforms.linux-x64": {"url": "a", "checksum": "c"}},
+                    {"version": "1", "options": {}, "platforms.windows-x64": {"url": "b"}},
+                ],
+                "airgap:y": [{"platforms.linux-x64": {"url": "other"}}],
+            }
+        }
+        self.assertEqual(urls.lock_urls(lock, "x"), ["a", "b"])
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -63,4 +63,4 @@ grep -o 'https://[^"]*' mise.lock | grep -v mise.jdx.dev | sort -u
 ## 4. Finish
 
 - `git add tools/<name>.toml dist/mise.toml`. Don't commit.
-- Report: the entry, the test version, platforms that aren't published, the gotchas you hit, and the de-duplicated list of URLs to mirror from the lock step.
+- Report: the entry, the test version, platforms that aren't published, the gotchas you hit, and the URLs to mirror from `mise run urls <name> <ver>` (internet URLs; it ignores `mirror.toml`).

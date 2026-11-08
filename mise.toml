@@ -14,3 +14,7 @@ run = "uv run scripts/build.py tools dist/mise.toml mirror.toml"
 [tasks.test]
 description = "Run build.py tests"
 run = "uv run python -m unittest discover tests"
+
+[tasks.urls]
+description = "Print internet URLs to mirror for a tool version, e.g. mise run urls jq 1.8.2"
+run = "uv run scripts/urls.py"
