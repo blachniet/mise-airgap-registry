@@ -1,3 +1,4 @@
 backend = "http:crane"
 test_version = "0.22.1"
+test_command = "crane version"
 url = "https://github.com/google/go-containerregistry/releases/download/v{{version}}/go-containerregistry_{{ os(linux='Linux', macos='Darwin', windows='Windows') }}_{{ arch(x64='x86_64') }}.tar.gz"
