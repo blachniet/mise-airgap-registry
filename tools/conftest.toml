@@ -1,0 +1,9 @@
+backend = "http:conftest"
+test_version = "0.71.1"
+url = "https://github.com/open-policy-agent/conftest/releases/download/v{{version}}/conftest_{{version}}_{{ os(linux='Linux', macos='Darwin') }}_{{ arch(x64='x86_64') }}.tar.gz"
+
+[platforms.windows-x64]
+url = "https://github.com/open-policy-agent/conftest/releases/download/v{{version}}/conftest_{{version}}_Windows_x86_64.zip"
+
+[platforms.windows-arm64]
+url = "https://github.com/open-policy-agent/conftest/releases/download/v{{version}}/conftest_{{version}}_Windows_arm64.zip"

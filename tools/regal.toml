@@ -1,0 +1,8 @@
+backend = "http:regal"
+test_version = "0.43.0"
+url = "https://github.com/open-policy-agent/regal/releases/download/v{{version}}/regal_{{ os(linux='Linux', macos='Darwin') }}_{{ arch(x64='x86_64') }}"
+bin = "regal"
+
+[platforms.windows-x64]
+url = "https://github.com/open-policy-agent/regal/releases/download/v{{version}}/regal_Windows_x86_64.exe"
+bin = "regal.exe"

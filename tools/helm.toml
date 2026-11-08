@@ -1,0 +1,10 @@
+backend = "http:helm"
+test_version = "4.3.1"
+url = "https://get.helm.sh/helm-v{{version}}-{{ os(macos='darwin') }}-{{ arch(x64='amd64') }}.tar.gz"
+strip_components = 1
+
+[platforms.windows-x64]
+url = "https://get.helm.sh/helm-v{{version}}-windows-amd64.zip"
+
+[platforms.windows-arm64]
+url = "https://get.helm.sh/helm-v{{version}}-windows-arm64.zip"

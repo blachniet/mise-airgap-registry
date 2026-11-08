@@ -1,0 +1,9 @@
+backend = "http:kustomize"
+test_version = "5.8.3"
+url = "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv{{version}}/kustomize_v{{version}}_{{ os(macos='darwin') }}_{{ arch(x64='amd64') }}.tar.gz"
+
+[platforms.windows-x64]
+url = "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv{{version}}/kustomize_v{{version}}_windows_amd64.zip"
+
+[platforms.windows-arm64]
+url = "https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv{{version}}/kustomize_v{{version}}_windows_arm64.zip"

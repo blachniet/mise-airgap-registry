@@ -1,0 +1,28 @@
+backend = "http:minisign"
+test_version = "0.12"
+url = "https://github.com/jedisct1/minisign/releases/download/{{version}}/minisign-{{version}}-linux.tar.gz"
+strip_components = 1
+bin_path = "x86_64"
+
+[platforms.linux-arm64]
+bin_path = "aarch64"
+
+[platforms.linux-arm64-musl]
+bin_path = "aarch64"
+
+[platforms.macos-x64]
+url = "https://github.com/jedisct1/minisign/releases/download/{{version}}/minisign-{{version}}-macos.zip"
+strip_components = 0
+bin_path = "."
+
+[platforms.macos-arm64]
+url = "https://github.com/jedisct1/minisign/releases/download/{{version}}/minisign-{{version}}-macos.zip"
+strip_components = 0
+bin_path = "."
+
+[platforms.windows-x64]
+url = "https://github.com/jedisct1/minisign/releases/download/{{version}}/minisign-{{version}}-win64.zip"
+
+[platforms.windows-arm64]
+url = "https://github.com/jedisct1/minisign/releases/download/{{version}}/minisign-{{version}}-win64.zip"
+bin_path = "aarch64"

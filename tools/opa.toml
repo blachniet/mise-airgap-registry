@@ -1,0 +1,8 @@
+backend = "http:opa"
+test_version = "1.22.2"
+url = "https://github.com/open-policy-agent/opa/releases/download/v{{version}}/opa_{{ os(macos='darwin') }}_{{ arch(x64='amd64') }}{{ os(linux='_static', macos='') }}"
+bin = "opa"
+
+[platforms.windows-x64]
+url = "https://github.com/open-policy-agent/opa/releases/download/v{{version}}/opa_windows_amd64.exe"
+bin = "opa.exe"
