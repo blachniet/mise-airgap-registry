@@ -12,7 +12,11 @@ NOT_FOUND = re.compile(r"404 Not Found\) for url \((\S+?)\)")
 
 
 def registry(tools, name):
-    f = tools / f"{name}.toml"
+    f, local = tools / f"{name}.toml", tools / build.LOCAL / f"{name}.toml"
+    if local.is_file():
+        if f.is_file():
+            return None, [f"{local}: also defined in {f}"]
+        return "", []
     if not f.is_file():
         return None, [f"{f}: no such tool"]
     line, errors = build.alias(f)
@@ -31,13 +35,15 @@ def lock_urls(lock, name):
 
 
 def sandbox_env(root, proj):
-    # Inherited MISE_* (task context, url_replacements, global settings) would leak into the lock.
-    env = {k: v for k, v in os.environ.items() if not k.startswith("MISE_")}
+    # Inherited MISE_* (task context, url_replacements, global settings) would leak into the lock,
+    # and XDG_* would point mise's state at the caller's real directories.
+    env = {k: v for k, v in os.environ.items() if not k.startswith(("MISE_", "XDG_"))}
     env.update(
         HOME=str(root / "home"),
         MISE_DATA_DIR=str(root / "data"),
         MISE_CACHE_DIR=str(root / "cache"),
         MISE_CONFIG_DIR=str(root / "config"),
+        MISE_STATE_DIR=str(root / "state"),
         MISE_TRUSTED_CONFIG_PATHS=str(proj),
     )
     return env
@@ -74,11 +80,16 @@ def main(argv):
     parser.add_argument("--tools", type=pathlib.Path, default=pathlib.Path("tools"))
     parser.add_argument("--platforms", default=",".join(PLATFORMS), help="comma-separated")
     args = parser.parse_args(argv[1:])
+    if not build.ALIAS_NAME.fullmatch(args.tool):
+        sys.exit(f"tool {args.tool!r} must match {build.ALIAS_NAME.pattern}")
     if not VERSION.fullmatch(args.version):
         sys.exit(f"version {args.version!r} must match {VERSION.pattern}")
     text, errors = registry(args.tools, args.tool)
     if errors:
         sys.exit("\n".join(errors))
+    if not text:
+        print(f"{args.tool} is a local tool ({args.tools / build.LOCAL}); nothing to mirror", file=sys.stderr)
+        return
     platforms = [p for p in args.platforms.split(",") if p]
     with concurrent.futures.ThreadPoolExecutor() as pool:
         jobs = [pool.submit(lock, text, args.tool, args.version, p) for p in platforms]

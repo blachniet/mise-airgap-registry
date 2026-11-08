@@ -5,7 +5,7 @@ description: Add a new tools/<name>.toml entry to this airgap registry. Discover
 
 # Add a tool to the airgap registry
 
-Each `tools/<name>.toml` becomes alias `airgap:<name>` in `dist/mise.toml` (committed, built by `mise run build`). `tools/*.toml` always hold the internet URLs; forks map them to internal locations in `mirror.toml`, never in `tools/`. See `tools/*.toml` for working examples of every pattern below.
+Each `tools/<name>.toml` becomes alias `airgap:<name>` in `dist/mise.toml` (committed, built by `mise run build`). `tools/*.toml` always hold the internet URLs; forks map them to internal locations in `mirror.toml`, never in `tools/`. A fork's internal-only tool (not on the internet) goes in `tools/local/<name>.toml` with its internal URL; upstream never adds files there, and `mirror.toml` doesn't apply to it. Skip the internet discovery steps for those. See `tools/*.toml` for working examples of every pattern below.
 
 ## 1. Discover
 

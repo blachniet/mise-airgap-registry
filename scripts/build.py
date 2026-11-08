@@ -9,6 +9,7 @@ BARE_KEY = re.compile(r"[A-Za-z0-9_-]+")
 CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f]")
 REGEX_PREFIX = "regex:"
 RESERVED = ("backend", "test_version")
+LOCAL = "local"
 
 
 class SpecError(Exception):
@@ -181,25 +182,46 @@ def alias(f, rules=(), override=None):
     return f'"{PREFIX}:{f.stem}" = \'\'\'{backend}[{",".join(opts)}]\'\'\'', []
 
 
+def toml_files(d):
+    return sorted(f for f in d.glob("*.toml") if f.is_file())
+
+
+def override_target_errors(overrides, upstream, local, src):
+    for n in overrides:
+        if n in local:
+            yield f"tools.{n}: local tool; edit {src.name}/{LOCAL}/{n}.toml instead"
+        elif n not in upstream:
+            yield f"tools.{n}: no {src.name}/{n}.toml"
+
+
 def build(src, mirror=None):
-    files = sorted(f for f in src.glob("*.toml") if f.is_file())
-    if not files:
+    upstream, local = toml_files(src), toml_files(src / LOCAL)
+    if not upstream + local:
         return None, [f"{src}: no *.toml files"]
-    rules, overrides, errors = (), {}, []
+    upstream_stems = {f.stem for f in upstream}
+    errors = [f"{f}: also defined in {src / f.name}" for f in local if f.stem in upstream_stems]
+    rules, overrides = (), {}
     sources = f"{src.name}/*.toml"
+    if local:
+        sources += f", {src.name}/{LOCAL}/*.toml"
     if mirror:
         (rules, overrides), errs = load_mirror(mirror)
-        stems = {f.stem for f in files}
-        errs += [f"tools.{n}: no {src.name}/{n}.toml" for n in overrides if n not in stems]
-        errors = [f"{mirror}: {e}" for e in errs]
+        errs += override_target_errors(overrides, upstream_stems, {f.stem for f in local}, src)
+        errors += [f"{mirror}: {e}" for e in errs]
         sources += f" and {mirror.name}"
-    lines = [HEADER.format(sources), "[tool_alias]"]
-    for f in files:
+    aliases = []
+    for f in upstream:
         line, errs = alias(f, rules, overrides.get(f.stem))
-        lines.append(line)
+        aliases.append((f.name, line))
+        errors += [f"{f}: {e}" for e in errs]
+    # Local tools already point at internal URLs, so mirror rewrites never apply.
+    for f in local:
+        line, errs = alias(f)
+        aliases.append((f.name, line))
         errors += [f"{f}: {e}" for e in errs]
     if errors:
         return None, errors
+    lines = [HEADER.format(sources), "[tool_alias]"] + [line for _, line in sorted(aliases)]
     return "\n".join(lines) + "\n", []
 
 

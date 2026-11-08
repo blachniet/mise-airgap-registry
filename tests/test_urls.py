@@ -12,7 +12,7 @@ platform = sys.argv[sys.argv.index("--platform") + 1]
 log = os.environ.get("FAKE_MISE_LOG")
 if log:
     with open(log, "a") as f:
-        f.write(" ".join(f"{k}={v}" for k, v in sorted(os.environ.items()) if k.startswith("MISE_")) + "\\n")
+        f.write(" ".join(f"{k}={v}" for k, v in sorted(os.environ.items()) if k.startswith(("MISE_", "XDG_"))) + "\\n")
 if platform == "windows-arm64":
     sys.exit("mise ERROR HTTP status client error (404 Not Found) for url (https://h/x-windows-arm64.zip)")
 if platform == "macos-x64":
@@ -68,13 +68,38 @@ class UrlsTest(unittest.TestCase):
 
     def test_sandboxes_mise_env(self):
         log = self.root / "mise.log"
-        env = {**self.env, "FAKE_MISE_LOG": str(log), "MISE_URL_REPLACEMENTS": '{"a":"b"}'}
+        env = {**self.env, "FAKE_MISE_LOG": str(log), "MISE_URL_REPLACEMENTS": '{"a":"b"}', "XDG_STATE_HOME": "/real/state"}
         result = self.run_urls("x", "1.0.0", "--platforms", "linux-x64", env=env)
         self.assertEqual(result.returncode, 0, result.stderr)
         seen = log.read_text()
         self.assertNotIn("MISE_URL_REPLACEMENTS", seen)
         self.assertIn("MISE_TRUSTED_CONFIG_PATHS=", seen)
         self.assertNotIn(str(pathlib.Path.home()), seen)
+        self.assertNotIn("XDG_STATE_HOME", seen)
+        state = dict(kv.split("=", 1) for kv in seen.split())["MISE_STATE_DIR"]
+        self.assertTrue(state.endswith("/state") and "/real/" not in state, state)
+
+    def test_local_tool_has_nothing_to_mirror(self):
+        log = self.root / "mise.log"
+        (self.tools / "local").mkdir()
+        (self.tools / "local" / "in.toml").write_text('backend = "http:in"\n', encoding="utf-8")
+        result = self.run_urls("in", "1.0.0", env={**self.env, "FAKE_MISE_LOG": str(log)})
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, "")
+        self.assertIn("in is a local tool", result.stderr)
+        self.assertFalse(log.exists())
+
+    def test_local_tool_colliding_with_upstream(self):
+        (self.tools / "local").mkdir()
+        (self.tools / "local" / "x.toml").write_text("", encoding="utf-8")
+        result = self.run_urls("x", "1.0.0")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("local/x.toml: also defined in", result.stderr)
+
+    def test_rejects_invalid_tool_name(self):
+        result = self.run_urls("local/x", "1.0.0")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("tool 'local/x' must match", result.stderr)
 
     def test_unknown_tool(self):
         result = self.run_urls("nope", "1.0.0")

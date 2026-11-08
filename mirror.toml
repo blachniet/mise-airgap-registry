@@ -1,6 +1,7 @@
 # Fork-owned mapping from internet URLs to where this airgap serves them.
 # Upstream leaves this empty: artifacts are served at their internet URLs.
 # tools/*.toml always keep the internet URLs; edit only this file in a fork.
+# Rules and overrides don't apply to tools/local/*.toml.
 #
 # [[rewrite]] rules apply to every `url` and `*_url` option, including
 # platforms.*.url. A plain `from` replaces every occurrence; a `regex:` from

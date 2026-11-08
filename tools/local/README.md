@@ -1,0 +1,1 @@
+Fork-owned tools that exist only inside the airgap, not on the internet. Each `<name>.toml` uses the same format as `tools/*.toml`, with its internal URL, and becomes `airgap:<name>`. Upstream never adds files here. Names must not collide with `tools/*.toml`, `mirror.toml` doesn't apply, and `mise run urls` reports nothing to mirror.

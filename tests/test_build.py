@@ -401,6 +401,86 @@ class MirrorTest(BuildTest):
         self.assertIn("absent.toml", errors[0])
 
 
+class LocalToolsTest(BuildTest):
+    def local(self, name, body):
+        d = self.tools / "local"
+        d.mkdir(exist_ok=True)
+        (d / name).write_text(textwrap.dedent(body), encoding="utf-8")
+
+    def mirror(self, body):
+        f = self.root / "mirror.toml"
+        f.write_text(textwrap.dedent(body), encoding="utf-8")
+        return f
+
+    def test_local_tools_are_merged_in_name_order(self):
+        self.write("b.toml", HEAD + 'url = "https://b"\n')
+        self.write("b-x.toml", HEAD + 'url = "https://bx"\n')
+        self.local("a.toml", HEAD + 'url = "https://internal/a"\n')
+        self.local("c.toml", HEAD + 'url = "https://internal/c"\n')
+        text, errors = build.build(self.tools)
+        self.assertEqual(errors, [])
+        self.assertEqual(
+            text,
+            "# @generated from tools/*.toml, tools/local/*.toml - do not edit\n"
+            "[tool_alias]\n"
+            "\"airgap:a\" = '''http:x[url='https://internal/a']'''\n"
+            "\"airgap:b-x\" = '''http:x[url='https://bx']'''\n"
+            "\"airgap:b\" = '''http:x[url='https://b']'''\n"
+            "\"airgap:c\" = '''http:x[url='https://internal/c']'''\n",
+        )
+
+    def test_no_local_dir_keeps_header(self):
+        self.write("a.toml", HEAD + 'url = "u"\n')
+        (self.tools / "local").mkdir()
+        (self.tools / "local" / "README.md").write_text("x", encoding="utf-8")
+        text, _ = build.build(self.tools)
+        self.assertEqual(text.splitlines()[0], "# @generated from tools/*.toml - do not edit")
+
+    def test_only_local_tools(self):
+        self.local("a.toml", HEAD + 'url = "u"\n')
+        text, errors = build.build(self.tools)
+        self.assertEqual(errors, [])
+        self.assertIn("airgap:a", text)
+
+    def test_mirror_rewrites_skip_local_tools(self):
+        self.write("up.toml", HEAD + 'url = "https://github.com/up"\n')
+        self.local("in.toml", HEAD + 'url = "https://github.com/in"\n')
+        text, errors = build.build(self.tools, self.mirror(
+            '[[rewrite]]\nfrom = "https://github.com/"\nto = "https://m/"\n'
+        ))
+        self.assertEqual(errors, [])
+        aliases = tomllib.loads(text)["tool_alias"]
+        self.assertEqual(aliases["airgap:up"], "http:x[url='https://m/up']")
+        self.assertEqual(aliases["airgap:in"], "http:x[url='https://github.com/in']")
+        self.assertIn("tools/*.toml, tools/local/*.toml and mirror.toml", text.splitlines()[0])
+
+    def test_collision_with_upstream(self):
+        self.write("a.toml", HEAD + 'url = "u"\n')
+        self.local("a.toml", HEAD + 'url = "v"\n')
+        text, errors = build.build(self.tools)
+        self.assertIsNone(text)
+        self.assertEqual(len(errors), 1, errors)
+        self.assertIn("local/a.toml: also defined in", errors[0])
+
+    def test_mirror_override_of_local_tool(self):
+        self.write("a.toml", HEAD + 'url = "u"\n')
+        self.local("b.toml", HEAD + 'url = "v"\n')
+        text, errors = build.build(self.tools, self.mirror('[tools.b]\nurl = "w"\n'))
+        self.assertIsNone(text)
+        self.assertEqual(len(errors), 1, errors)
+        self.assertIn("tools.b: local tool; edit tools/local/b.toml instead", errors[0])
+
+    def test_local_tools_are_validated(self):
+        self.write("a.toml", HEAD + 'url = "u"\n')
+        self.local("Bad.toml", 'url = 1.5\n')
+        text, errors = build.build(self.tools)
+        self.assertIsNone(text)
+        joined = "\n".join(errors)
+        for expected in ("file name must match", "backend: required", "test_version: required", "unsupported value type float"):
+            self.assertIn(expected, joined)
+        self.assertTrue(all("local/Bad.toml" in e for e in errors), errors)
+
+
 class CliTest(BuildTest):
     def run_build(self, out, env=None, *extra):
         return subprocess.run(
