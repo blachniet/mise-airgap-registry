@@ -18,15 +18,17 @@ def env(root, proj):
 
 
 @contextlib.contextmanager
-def project(registry, tools):
-    """Yield (proj, env) for a project that includes `registry` text and pins `tools` ({alias: version})."""
+def project(registry, tools, include=None):
+    """Yield (proj, env) for a project that pins `tools` ({alias: version}) and includes `registry` text, or `include` (a mise include such as oci::...) instead."""
     with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         # macOS temp dirs sit behind a /var -> /private/var symlink, which breaks the trust match.
         root = pathlib.Path(tmp).resolve()
         proj = root / "proj"
         proj.mkdir()
-        (proj / "registry.toml").write_text(registry, encoding="utf-8")
+        if include is None:
+            include = "registry.toml"
+            (proj / include).write_text(registry, encoding="utf-8")
         pins = "".join(f'"{alias}" = "{version}"\n' for alias, version in tools.items())
-        (proj / "mise.toml").write_text(f'include = ["registry.toml"]\n[tools]\n{pins}', encoding="utf-8")
+        (proj / "mise.toml").write_text(f'include = ["{include}"]\n[tools]\n{pins}', encoding="utf-8")
         (proj / "mise.lock").touch()
         yield proj, env(root, proj)

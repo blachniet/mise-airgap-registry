@@ -6,6 +6,7 @@ python.uv_venv_auto = "source"
 [tools]
 "airgap:uv" = "0.13.7"
 "airgap:age" = "1.2.1"
+"airgap:oras" = "1.3.6"
 
 [tasks.build]
 description = "Generate dist/mise.toml from tools/*.toml and mirror.toml"
@@ -22,3 +23,7 @@ run = "uv run scripts/urls.py"
 [tasks.validate]
 description = "Install a tool's test_version in a sandbox and run its test_command, e.g. mise run validate jq"
 run = "uv run scripts/validate.py"
+
+[tasks.package]
+description = "Write release/registry-<tag>.zip from dist/mise.toml, e.g. mise run package v1.0.0"
+run = "uv run scripts/package.py"

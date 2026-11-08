@@ -6,3 +6,4 @@
 - The alias prefix is `prefix` in `mirror.toml` (default `airgap`), read by `scripts/build.py`; `airgap:` below stands for it. Never hard-code it in scripts.
 - Never run `mise use 'airgap:<tool>@<ver>'`; mise 2026.11.x fails or inlines the alias options. Edit `[tools]` by hand.
 - Test mise behavior only in a sandbox with temp `HOME`, `MISE_{DATA,CACHE,CONFIG,STATE}_DIR` and `MISE_TRUSTED_CONFIG_PATHS` (see `scripts/sandbox.py`).
+- Push the OCI artifact from inside `dist/` as `mise.toml:application/toml`: mise reads `mise.toml` from the unpacked artifact, so the layer must be titled `mise.toml`.

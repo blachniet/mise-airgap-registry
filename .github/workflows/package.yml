@@ -1,0 +1,46 @@
+name: Package
+
+on:
+  pull_request:
+    paths:
+      - "scripts/**"
+      - "mise.toml"
+      - "mirror.toml"
+      - "dist/mise.toml"
+      - ".github/workflows/package.yml"
+      - ".github/workflows/release.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    services:
+      registry:
+        image: registry:2
+        ports:
+          - 5000:5000
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: jdx/mise-action@b44d12e7d0d8ee7461bb893e1b1993500433185b # v5.2.7
+        with:
+          version: 2026.11.3
+      - run: mise run package v0.0.0-test
+      - name: Check the zip holds only mise.toml
+        run: test "$(unzip -Z1 release/registry-v0.0.0-test.zip)" = mise.toml
+      - name: Push to the throwaway registry
+        id: oci
+        run: |
+          cd dist
+          digest=$(oras push --format 'go-template={{.digest}}' \
+            --artifact-type application/vnd.mise.registry.v1 \
+            --annotation "org.opencontainers.image.created=$(git log -1 --format=%cI)" \
+            localhost:5000/registry:test mise.toml:application/toml)
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+      - name: Include the artifact and install a tool
+        run: mise run validate jq --include "oci::localhost:5000/registry@${{ steps.oci.outputs.digest }}"

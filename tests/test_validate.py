@@ -73,6 +73,13 @@ class ValidateTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("['exec', '--', 'why', 'version', '--client']", self.calls()[1])
 
+    def test_include_replaces_registry(self):
+        self.tool("x.toml", 'test_version = "1.0.0"\n')
+        self.registry.unlink()
+        result = self.run_validate("x", "--include", "oci::localhost:5055/reg:v1")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.calls()[0], "['install'] \"airgap:x\" = \"1.0.0\"")
+
     def test_install_failure_stops(self):
         self.tool("x.toml", 'test_version = "1"\n')
         result = self.run_validate("x", FAKE_MISE_FAIL="install")

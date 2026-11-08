@@ -22,6 +22,7 @@ def main(argv):
     parser.add_argument("tool", help="name of a tools/<tool>.toml or tools/local/<tool>.toml file")
     parser.add_argument("--tools", type=pathlib.Path, default=pathlib.Path("tools"))
     parser.add_argument("--registry", type=pathlib.Path, default=pathlib.Path("dist/mise.toml"))
+    parser.add_argument("--include", help="mise include to use instead of --registry, e.g. oci::localhost:5055/reg:v1")
     build.mirror_arg(parser)
     args = parser.parse_args(argv[1:])
     if not build.ALIAS_NAME.fullmatch(args.tool):
@@ -31,8 +32,8 @@ def main(argv):
         sys.exit("\n".join(errors))
     spec = tomllib.loads(spec_file(args.tools, args.tool).read_text(encoding="utf-8"))
     command = shlex.split(spec.get("test_command", f"{args.tool} --version"))
-    registry = args.registry.read_text(encoding="utf-8")
-    with sandbox.project(registry, {f"{prefix}:{args.tool}": spec["test_version"]}) as (proj, env):
+    registry = None if args.include else args.registry.read_text(encoding="utf-8")
+    with sandbox.project(registry, {f"{prefix}:{args.tool}": spec["test_version"]}, args.include) as (proj, env):
         run(["mise", "install"], proj, env)
         run(["mise", "exec", "--", *command], proj, env)
 
