@@ -46,7 +46,7 @@ jobs:
               done || true)
             fi
           fi
-          json=$(printf '%s\n' $tools | sort -u | jq -Rsc 'split("\n") | map(select(length > 0))')
+          json=$(printf '%s\n' "$tools" | sort -u | jq -Rsc 'split("\n") | map(select(length > 0))')
           echo "tools=$json" >> "$GITHUB_OUTPUT"
           echo "Selected: $json"
 
