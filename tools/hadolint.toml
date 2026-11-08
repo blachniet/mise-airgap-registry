@@ -1,0 +1,8 @@
+backend = "http:hadolint"
+test_version = "2.15.1"
+url = "https://github.com/hadolint/hadolint/releases/download/v{{version}}/hadolint-{{ os() }}-{{ arch(x64='x86_64') }}"
+bin = "hadolint"
+
+[platforms.windows-x64]
+url = "https://github.com/hadolint/hadolint/releases/download/v{{version}}/hadolint-windows-x86_64.exe"
+bin = "hadolint.exe"

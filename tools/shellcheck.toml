@@ -1,0 +1,8 @@
+backend = "http:shellcheck"
+test_version = "0.11.0"
+url = "https://github.com/koalaman/shellcheck/releases/download/v{{version}}/shellcheck-v{{version}}.{{ os(macos='darwin') }}.{{ arch(x64='x86_64', arm64='aarch64') }}.tar.gz"
+strip_components = 1
+
+[platforms.windows-x64]
+url = "https://github.com/koalaman/shellcheck/releases/download/v{{version}}/shellcheck-v{{version}}.zip"
+strip_components = 0
