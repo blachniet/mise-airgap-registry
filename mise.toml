@@ -16,5 +16,9 @@ description = "Run tests"
 run = "uv run python -m unittest discover tests"
 
 [tasks.urls]
-description = "Print internet URLs to mirror for a tool version, e.g. mise run urls jq 1.8.2"
+description = "Print internet URLs to mirror for a tool version (default: test_version), e.g. mise run urls jq 1.8.2"
 run = "uv run scripts/urls.py"
+
+[tasks.validate]
+description = "Install a tool's test_version in a sandbox and run its test_command, e.g. mise run validate jq"
+run = "uv run scripts/validate.py"

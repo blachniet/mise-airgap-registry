@@ -1,0 +1,82 @@
+name: Tools
+
+on:
+  pull_request:
+    paths:
+      - "tools/**"
+      - "scripts/**"
+      - "mirror.toml"
+      - "mise.toml"
+      - ".github/workflows/tools.yml"
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  select:
+    runs-on: ubuntu-latest
+    outputs:
+      tools: ${{ steps.select.outputs.tools }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - id: select
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          all() { find tools -maxdepth 2 -name '*.toml' -path 'tools/*' | sed -E 's|^tools/(local/)?||; s|\.toml$||'; }
+          if [ -z "$BASE" ]; then
+            tools=$(all)
+          else
+            changed=$(git diff --name-only "$BASE"...HEAD)
+            # Shared code changes can break any tool, so they validate everything.
+            if grep -qE '^(scripts/|mirror\.toml$|mise\.toml$|\.github/workflows/tools\.yml$)' <<<"$changed"; then
+              tools=$(all)
+            else
+              tools=$(grep -E '^tools/(local/)?[^/]+\.toml$' <<<"$changed" | while read -r f; do
+                [ -f "$f" ] && basename "$f" .toml
+              done || true)
+            fi
+          fi
+          json=$(printf '%s\n' $tools | sort -u | jq -Rsc 'split("\n") | map(select(length > 0))')
+          echo "tools=$json" >> "$GITHUB_OUTPUT"
+          echo "Selected: $json"
+
+  urls:
+    needs: select
+    if: needs.select.outputs.tools != '[]'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        tool: ${{ fromJSON(needs.select.outputs.tools) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: jdx/mise-action@b44d12e7d0d8ee7461bb893e1b1993500433185b # v5.2.7
+        with:
+          version: 2026.11.3
+      - run: mise run urls ${{ matrix.tool }}
+
+  validate:
+    needs: select
+    if: needs.select.outputs.tools != '[]'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        tool: ${{ fromJSON(needs.select.outputs.tools) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: jdx/mise-action@b44d12e7d0d8ee7461bb893e1b1993500433185b # v5.2.7
+        with:
+          version: 2026.11.3
+      - run: mise run validate ${{ matrix.tool }}

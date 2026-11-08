@@ -30,6 +30,7 @@ url = "https://.../<name>_windows_amd64.zip"
 ```
 
 - File stem must match `[a-z0-9][a-z0-9_-]*`. `backend` must be `http:<name>`. `test_version` is required and is not emitted.
+- `test_command` (optional, not emitted) defaults to `<name> --version`. Set it when the binary or flag differs, e.g. `"tofu --version"`, `"kubectl version --client"`.
 - One templated `url`, plus `[platforms.<os>-<arch>]` overrides only for exceptions. Any option can be overridden per platform.
 - Tera: `os()` → linux/macos/windows, `arch()` → x64/arm64, both take rename kwargs. Use single quotes inside `{{ }}` (the TOML string is double-quoted).
 - libc split: prefer gnu, with musl only on musl hosts: `{{ os(linux='unknown-linux-' ~ libc(), macos='apple-darwin') }}`. Don't hard-code musl. `mise lock` treats `linux-x64` and `linux-x64-musl` as separate targets.
@@ -43,19 +44,18 @@ url = "https://.../<name>_windows_amd64.zip"
 ## 3. Verify
 
 ```sh
-uv run scripts/build.py tools dist/mise.toml mirror.toml   # or: mise run build
-S=<scratchpad>/<name>sb; rm -rf $S; mkdir -p $S/proj; cp dist/mise.toml $S/proj/registry.toml; cd $S/proj
-export HOME=$S/home MISE_DATA_DIR=$S/data MISE_CACHE_DIR=$S/cache MISE_CONFIG_DIR=$S/cfg MISE_TRUSTED_CONFIG_PATHS=$S/proj
-printf 'include = ["registry.toml"]\n[tools]\n"airgap:<name>" = "<ver>"\n' > mise.toml; touch mise.lock
-mise install && ls -l $S/data/installs/airgap-<name>/<ver>/ && mise exec -- <name> --version
-cd - && mise run urls <name> <ver>   # every platform; 404s reported as not published
+mise run build
+mise run validate <name>   # sandboxed install of test_version, then test_command
+mise run urls <name>       # every platform's URL; 404s reported as not published
+mise run test
 ```
 
-- Always use the isolated sandbox. Write `[tools]` by hand; **never `mise use 'airgap:x@v'`**. In mise 2026.11.x it fails with "Http backend requires 'url' option", and for a tool already in `[tools]` it inlines the registry's options into the project file.
+- Both tasks run in an isolated sandbox. **Never `mise use 'airgap:x@v'`**: in mise 2026.11.x it fails with "Http backend requires 'url' option", and for a tool already in `[tools]` it inlines the registry's options into the project file.
+- CI runs `validate` on Linux, macOS and Windows, so check the Windows overrides carefully even though you can't run them locally.
 - `mise run urls` reports each 404 platform as not published. If the tool does publish that platform, fix the template or override.
 - Large downloads (vault) can exceed the default 2-minute Bash timeout; raise it.
 - Some tools phone home on `--version` (sops prints "(latest)"). Note that for the user.
-- Then in the repo: `mise run build` and `mise run test`. If `dist/mise.toml` breaks, every mise command fails; recover with `uv run scripts/build.py tools dist/mise.toml mirror.toml` or `git checkout dist/`.
+- If `dist/mise.toml` breaks, every mise command fails; recover with `uv run scripts/build.py tools dist/mise.toml mirror.toml` or `git checkout dist/`.
 
 ## 4. Finish
 

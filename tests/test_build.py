@@ -62,6 +62,12 @@ class OutputTest(BuildTest):
     def test_test_version_is_stripped(self):
         self.assertEqual(self.options('url = "u"'), "url='u'")
 
+    def test_test_command_is_stripped(self):
+        self.assertEqual(self.options('test_command = "x version"\nurl = "u"'), "url='u'")
+
+    def test_test_command_must_be_a_string(self):
+        self.assertIn("test_command: must be a non-empty string", self.error(HEAD + 'test_command = 1\nurl = "u"'))
+
     def test_flattens_nested_tables(self):
         body = """
             url = "u"
@@ -383,6 +389,7 @@ class MirrorTest(BuildTest):
             "[tools]\nx = 1\n": "tools.x: must be a table",
             "[tools.x]\nbackend = 'http:y'\n": "tools.x.backend: set it in tools/x.toml",
             "[tools.x]\ntest_version = '2'\n": "tools.x.test_version: set it in tools/x.toml",
+            "[tools.x]\ntest_command = 'x'\n": "tools.x.test_command: set it in tools/x.toml",
             "[tools.y]\nurl = 'u'\n": "tools.y: no tools/y.toml",
             "x = [\n": "mirror.toml: ",
         }

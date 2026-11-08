@@ -4,4 +4,4 @@
 - A broken `dist/mise.toml` breaks every mise command here, including `mise run build` (it's included, and uv comes from `airgap:uv`); recover with `git checkout dist/` or `python3 scripts/build.py tools dist/mise.toml mirror.toml`.
 - Keep internet URLs in `tools/*.toml`; internal URLs go in `mirror.toml`, internal-only tools in `tools/local/` (see README "Maintaining a fork").
 - Never run `mise use 'airgap:<tool>@<ver>'`; mise 2026.11.x fails or inlines the alias options. Edit `[tools]` by hand.
-- Test mise behavior only in a sandbox with temp `HOME`, `MISE_{DATA,CACHE,CONFIG,STATE}_DIR` and `MISE_TRUSTED_CONFIG_PATHS` (see `sandbox_env` in `scripts/urls.py`).
+- Test mise behavior only in a sandbox with temp `HOME`, `MISE_{DATA,CACHE,CONFIG,STATE}_DIR` and `MISE_TRUSTED_CONFIG_PATHS` (see `scripts/sandbox.py`).
