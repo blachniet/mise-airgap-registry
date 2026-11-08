@@ -1,0 +1,12 @@
+backend = "http:jq"
+test_version = "1.8.2"
+url = "https://github.com/jqlang/jq/releases/download/jq-{{version}}/jq-{{ os() }}-{{ arch(x64='amd64') }}"
+bin = "jq"
+
+[platforms.windows-x64]
+url = "https://github.com/jqlang/jq/releases/download/jq-{{version}}/jq-windows-amd64.exe"
+bin = "jq.exe"
+
+[platforms.windows-arm64]
+url = "https://github.com/jqlang/jq/releases/download/jq-{{version}}/jq-windows-arm64.exe"
+bin = "jq.exe"

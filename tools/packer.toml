@@ -1,0 +1,3 @@
+backend = "http:packer"
+test_version = "1.16.2"
+url = "https://releases.hashicorp.com/packer/{{version}}/packer_{{version}}_{{ os(macos='darwin') }}_{{ arch(x64='amd64') }}.zip"

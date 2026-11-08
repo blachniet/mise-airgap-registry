@@ -1,0 +1,16 @@
+include = ["dist/mise.toml"]
+
+[settings]
+python.uv_venv_auto = "source"
+
+[tools]
+"airgap:uv" = "0.13.7"
+"airgap:age" = "1.2.1"
+
+[tasks.build]
+description = "Generate dist/mise.toml from tools/*.toml"
+run = "uv run scripts/build.py tools dist/mise.toml"
+
+[tasks.test]
+description = "Run build.py tests"
+run = "uv run python -m unittest discover tests"

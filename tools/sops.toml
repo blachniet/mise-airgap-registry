@@ -1,0 +1,12 @@
+backend = "http:sops"
+test_version = "3.13.3"
+url = "https://github.com/getsops/sops/releases/download/v{{version}}/sops-v{{version}}.{{ os(macos='darwin') }}.{{ arch(x64='amd64') }}"
+bin = "sops"
+
+[platforms.windows-x64]
+url = "https://github.com/getsops/sops/releases/download/v{{version}}/sops-v{{version}}.amd64.exe"
+bin = "sops.exe"
+
+[platforms.windows-arm64]
+url = "https://github.com/getsops/sops/releases/download/v{{version}}/sops-v{{version}}.arm64.exe"
+bin = "sops.exe"

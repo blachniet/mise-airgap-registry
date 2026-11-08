@@ -1,0 +1,12 @@
+backend = "http:uv"
+test_version = "0.13.7"
+url = "https://releases.astral.sh/github/uv/releases/download/{{version}}/uv-{{ arch(x64='x86_64', arm64='aarch64') }}-{{ os(linux='unknown-linux-' ~ libc(), macos='apple-darwin') }}.tar.gz"
+strip_components = 1
+
+[platforms.windows-x64]
+url = "https://releases.astral.sh/github/uv/releases/download/{{version}}/uv-x86_64-pc-windows-msvc.zip"
+strip_components = 0
+
+[platforms.windows-arm64]
+url = "https://releases.astral.sh/github/uv/releases/download/{{version}}/uv-aarch64-pc-windows-msvc.zip"
+strip_components = 0
