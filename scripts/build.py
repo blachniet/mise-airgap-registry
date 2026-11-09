@@ -13,8 +13,10 @@ ALIAS_NAME = re.compile(r"[a-z0-9][a-z0-9_-]*")
 BACKEND = re.compile(rf"http:{ALIAS_NAME.pattern}")
 BARE_KEY = re.compile(r"[A-Za-z0-9_-]+")
 CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f]")
-RESERVED = ("backend", "test_version", "test_command")
+RESERVED = ("backend", "test_version", "test_command", "unsupported_platforms")
 LOCAL = "local"
+PLATFORMS = ("linux-x64", "linux-arm64", "macos-x64", "macos-arm64", "windows-x64", "windows-arm64")
+PLATFORM_KEYS = PLATFORMS + ("linux-x64-musl", "linux-arm64-musl")
 
 
 class SpecError(Exception):
@@ -100,6 +102,56 @@ def merge(base, override):
             merge(base[k], v)
         else:
             base[k] = v
+
+
+def pop_unsupported(spec, errors):
+    v = spec.pop("unsupported_platforms", None)
+    if v is None:
+        return []
+    if not isinstance(v, list) or not v or not all(isinstance(p, str) for p in v):
+        errors.append("unsupported_platforms: must be a non-empty array of strings")
+        return []
+    errs = [f"unsupported_platforms: unknown platform {p!r}; use one of {', '.join(PLATFORMS)}" for p in v if p not in PLATFORMS]
+    if len(set(v)) != len(v):
+        errs.append("unsupported_platforms: duplicate platforms")
+    if set(PLATFORMS) <= set(v):
+        errs.append("unsupported_platforms: every platform is listed")
+    errors += errs
+    return [] if errs else v
+
+
+# mise also reads aliases such as darwin-x64, [platform.*] and platform(s)_<os>_<arch>_<opt>, which would bypass
+# the unsupported check or lose to the copied url.
+def platform_errors(opts, unsupported, mirror=False):
+    for k in opts:
+        if k == "platform" or k.startswith(("platform_", "platforms_")):
+            yield f"{k}: with unsupported_platforms, use [platforms.<platform>] tables"
+    platforms = opts.get("platforms", {})
+    if not isinstance(platforms, dict):
+        yield "platforms: must be a table"
+        return
+    for k, o in platforms.items():
+        if k not in PLATFORM_KEYS:
+            yield f"platforms.{k}: with unsupported_platforms, use one of {', '.join(PLATFORM_KEYS)}"
+        elif not isinstance(o, dict):
+            yield f"platforms.{k}: must be a table"
+        elif k in unsupported and not mirror:
+            yield f"platforms.{k}: listed in unsupported_platforms"
+        elif k in unsupported and "url" not in o:
+            yield f"platforms.{k}: supplies an unsupported platform but has no url"
+
+
+# mise skips a platform with no URL ("not available") but fails the whole lock on a 404, so an unsupported
+# platform needs the top-level url copied to every other platform and then dropped.
+def expand_unsupported(spec, unsupported, errors):
+    url = spec.pop("url", None)
+    if url is None:
+        errors.append("unsupported_platforms: requires a top-level url")
+        return
+    platforms = spec.setdefault("platforms", {})
+    for p in PLATFORMS:
+        if p not in unsupported:
+            platforms.setdefault(p, {}).setdefault("url", url)
 
 
 def rule(r):
@@ -193,8 +245,16 @@ def alias(f, rules=(), override=None, prefix=DEFAULT_PREFIX):
     pop_string(spec, "test_version", errors)
     if "test_command" in spec:
         pop_string(spec, "test_command", errors)
+    unsupported = pop_unsupported(spec, errors)
+    if unsupported:
+        # A fork may supply an unsupported platform from mirror.toml, e.g. an internal build.
+        errs = list(platform_errors(spec, unsupported))
+        errs += [f"{e} (in the mirror override)" for e in platform_errors(override or {}, unsupported, mirror=True)]
+        errors += errs
     rewrite_urls(spec, rules)
     merge(spec, override or {})
+    if unsupported and not errs:
+        expand_unsupported(spec, unsupported, errors)
     if not spec:
         errors.append("no backend options")
     opts = []

@@ -144,6 +144,12 @@ strip_components = 1
 url = "https://github.com/FiloSottile/age/releases/download/v{{version}}/age-v{{version}}-windows-amd64.zip"
 ```
 
+If a tool doesn't publish a build for some platform, list it in `unsupported_platforms` so installs elsewhere aren't broken by the missing download:
+
+```toml
+unsupported_platforms = ["macos-x64"]   # e.g. hk has no Intel Mac build
+```
+
 ### Build and test
 
 After any change, rebuild the registry and commit `dist/mise.toml` along with your changes:

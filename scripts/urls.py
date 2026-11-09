@@ -46,6 +46,8 @@ def lock(text, prefix, name, version, platform):
                 return platform, [], f"not published ({missing[1]} returned 404)"
             raise RuntimeError(f"{platform}: mise lock failed:\n{result.stderr.strip()}")
         urls = lock_urls(tomllib.loads((proj / "mise.lock").read_text(encoding="utf-8")), prefix, name)
+        if not urls:
+            return platform, [], "not supported (no URL for this platform)"
         return platform, urls, None
 
 
