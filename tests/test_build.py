@@ -298,6 +298,9 @@ class UnsupportedTest(BuildTest):
             '[platforms.darwin-x64]\nurl = "m"': "platforms.darwin-x64: with unsupported_platforms, use one of",
             'platforms.linux-x64 = "s"': "platforms.linux-x64: must be a table",
             'platforms = "s"': "platforms: must be a table",
+            '[platform.macos-x64]\nurl = "m"': "platform: with unsupported_platforms, use [platforms.<platform>] tables",
+            'platform_macos_x64_url = "m"': "platform_macos_x64_url: with unsupported_platforms, use",
+            'platforms_macos_x64_url = "m"': "platforms_macos_x64_url: with unsupported_platforms, use",
         }
         for body, message in cases.items():
             with self.subTest(body=body):
@@ -456,6 +459,11 @@ class MirrorTest(BuildTest):
         self.assertEqual(len(errors), 1, errors)
         self.assertIn("platforms.darwin-arm64: with unsupported_platforms, use one of", errors[0])
         self.assertIn("(in the mirror override)", errors[0])
+
+    def test_mirror_flat_platform_option_is_attributed_to_mirror(self):
+        errors = self.mirror_errors('[tools.x]\nplatform_macos_x64_url = "m"\n', tool='url = "u"\nunsupported_platforms = ["macos-x64"]\n')
+        self.assertEqual(len(errors), 1, errors)
+        self.assertIn("platform_macos_x64_url: with unsupported_platforms, use [platforms.<platform>] tables (in the mirror override)", errors[0])
 
     def test_unsupported_is_reserved_in_mirror(self):
         errors = self.mirror_errors('[tools.x]\nunsupported_platforms = ["macos-x64"]\n')
