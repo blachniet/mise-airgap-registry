@@ -144,12 +144,10 @@ strip_components = 1
 url = "https://github.com/FiloSottile/age/releases/download/v{{version}}/age-v{{version}}-windows-amd64.zip"
 ```
 
-If the tool doesn't publish a platform, list it in `unsupported_platforms` (any of `linux-x64`, `linux-arm64`, `macos-x64`, `macos-arm64`, `windows-x64`, `windows-arm64`). Otherwise, in any project with a `mise.lock`, `mise install` and `mise lock` fail on every machine with a 404, because they lock the common platforms, not just the current one. With it, `mise lock` skips that platform; on that platform itself `mise install` fails with "No URL for platform", so don't pin the tool in projects used there. `unsupported_platforms` needs a top-level `url`. Platform overrides must use the names above (or `linux-x64-musl`, `linux-arm64-musl`), and an unsupported platform can't have one in `tools/` (a fork with its own build can add it in `mirror.toml`). For example:
+If a tool doesn't publish a build for some platform, list it in `unsupported_platforms` so installs elsewhere aren't broken by the missing download:
 
 ```toml
-# tools/hk.toml has no Intel macOS build
-url = "https://github.com/jdx/hk/releases/download/v{{version}}/hk-{{ arch(x64='x86_64', arm64='aarch64') }}-{{ os(linux='unknown-linux-' ~ libc(), macos='apple-darwin') }}.tar.gz"
-unsupported_platforms = ["macos-x64"]
+unsupported_platforms = ["macos-x64"]   # e.g. hk has no Intel Mac build
 ```
 
 ### Build and test
