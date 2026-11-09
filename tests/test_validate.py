@@ -1,6 +1,8 @@
 import os, pathlib, subprocess, sys, tempfile, unittest
 
 SCRIPT = pathlib.Path(__file__).resolve().parent.parent / "scripts" / "validate.py"
+sys.path.insert(0, str(SCRIPT.parent))
+import validate
 
 FAKE_MISE = """\
 #!/usr/bin/env python3
@@ -85,6 +87,32 @@ class ValidateTest(unittest.TestCase):
         result = self.run_validate("x", FAKE_MISE_FAIL="exec")
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("failed: mise exec -- x --version", result.stderr)
+
+    def test_skips_unsupported_host(self):
+        self.tool("x.toml", f'test_version = "1"\nunsupported_platforms = ["{validate.host_platform()}"]\n')
+        result = self.run_validate("x")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn(f"x is unsupported on {validate.host_platform()}; skipping", result.stderr)
+        self.assertFalse(self.log.exists())
+
+    def test_runs_when_mirror_supplies_unsupported_host(self):
+        host = validate.host_platform()
+        self.tool("x.toml", f'test_version = "1"\nunsupported_platforms = ["{host}"]\n')
+        mirror = self.root / "mirror.toml"
+        mirror.write_text(f'[tools.x.platforms.{host}]\nurl = "https://internal/x"\n', encoding="utf-8")
+        result = self.run_validate("x", "--mirror", mirror)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(len(self.calls()), 2)
+
+    def test_runs_when_another_platform_is_unsupported(self):
+        other = "windows-arm64" if validate.host_platform() != "windows-arm64" else "linux-x64"
+        self.tool("x.toml", f'test_version = "1"\nunsupported_platforms = ["{other}"]\n')
+        result = self.run_validate("x")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(len(self.calls()), 2)
+
+    def test_host_platform_names(self):
+        self.assertIn(validate.host_platform(), validate.build.PLATFORMS)
 
     def test_unknown_tool(self):
         result = self.run_validate("nope")

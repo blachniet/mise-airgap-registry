@@ -38,7 +38,7 @@ url = "https://.../<name>_windows_amd64.zip"
 - Archive whose binary has a platform-suffixed name or no exec bit (terragrunt): `rename_exe = "<name>"`.
 - Raw binary: `bin = "<name>"`; Windows overrides need `bin = "<name>.exe"`.
 - Format (`.zip`/`.tar.gz`) is auto-detected; no `format` needed.
-- Missing platform: omit it; don't add an override.
+- Missing platform: list it in `unsupported_platforms` (not emitted), e.g. `unsupported_platforms = ["macos-x64"]` for hk. Platforms are `linux-x64`, `linux-arm64`, `macos-x64`, `macos-arm64`, `windows-x64`, `windows-arm64`. Without it, `mise install` and `mise lock` fail on the 404 in any project with a `mise.lock`, on every host. With it, build.py copies the top-level `url` to each other platform and drops it, so `mise lock` skips that platform (`mise install` on it fails with "No URL for platform"). Requires a top-level `url`; override keys must be canonical (`darwin-x64` etc. are rejected) and can't name an unsupported platform.
 - build.py doesn't check option names. mise rejects unknown ones at install: "option `x` is not used by the http backend".
 
 ## 3. Verify
@@ -46,13 +46,14 @@ url = "https://.../<name>_windows_amd64.zip"
 ```sh
 mise run build
 mise run validate <name>   # sandboxed install of test_version, then test_command
-mise run urls <name>       # every platform's URL; 404s reported as not published
+mise run urls <name>       # every platform's URL; 404s and unsupported platforms reported on stderr
 mise run test
 ```
 
 - Both tasks run in an isolated sandbox. **Never `mise use 'airgap:x@v'`**: in mise 2026.11.x it fails with "Http backend requires 'url' option", and for a tool already in `[tools]` it inlines the registry's options into the project file.
 - CI runs `validate` on Linux, macOS and Windows, so check the Windows overrides carefully even though you can't run them locally.
-- `mise run urls` reports each 404 platform as not published. If the tool does publish that platform, fix the template or override.
+- `mise run urls` reports each 404 platform as not published and each `unsupported_platforms` platform as not supported. If the tool does publish that platform, fix the template or override; if it doesn't, add it to `unsupported_platforms`.
+- `validate` fails on a 404 for any platform mise locks by default (linux x64/arm64 gnu and musl, macos x64/arm64, windows-x64), not only the host. Add the missing one to `unsupported_platforms`. `validate` skips the tool on a host listed in `unsupported_platforms`.
 - Large downloads (vault) can exceed the default 2-minute Bash timeout; raise it.
 - Some tools phone home on `--version` (sops prints "(latest)"). Note that for the user.
 - If `dist/mise.toml` breaks, every mise command fails; recover with `uv run scripts/build.py tools dist/mise.toml mirror.toml` or `git checkout dist/`.

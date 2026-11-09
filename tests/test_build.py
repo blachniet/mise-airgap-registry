@@ -245,6 +245,70 @@ def stringify(v):
     return str(v)
 
 
+class UnsupportedTest(BuildTest):
+    def opts(self, body):
+        backend = tomllib.loads(f"a = {self.alias(body).split(' = ', 1)[1]}")["a"]
+        return tomllib.loads(f"t = {{{backend[len('http:x['):-1]}}}")["t"]
+
+    def test_copies_url_to_supported_platforms(self):
+        opts = self.opts("""
+            url = "u"
+            strip_components = 1
+            unsupported_platforms = ["macos-x64"]
+            [platforms.windows-x64]
+            url = "w"
+            bin = "x.exe"
+        """)
+        self.assertNotIn("url", opts)
+        self.assertNotIn("unsupported_platforms", opts)
+        self.assertEqual(opts["strip_components"], "1")
+        self.assertEqual(
+            {p: o.get("url") for p, o in opts["platforms"].items()},
+            {"linux-x64": "u", "linux-arm64": "u", "macos-arm64": "u", "windows-x64": "w", "windows-arm64": "u"},
+        )
+        self.assertEqual(opts["platforms"]["windows-x64"]["bin"], "x.exe")
+
+    def test_keeps_platform_options_without_url(self):
+        opts = self.opts('url = "u"\nunsupported_platforms = ["windows-arm64"]\n[platforms.windows-x64]\nbin = "x.exe"\n')
+        self.assertEqual(opts["platforms"]["windows-x64"], {"bin": "x.exe", "url": "u"})
+
+    def test_invalid_values(self):
+        cases = {
+            'unsupported_platforms = "macos-x64"': "unsupported_platforms: must be a non-empty array of strings",
+            "unsupported_platforms = []": "unsupported_platforms: must be a non-empty array of strings",
+            "unsupported_platforms = [1]": "unsupported_platforms: must be a non-empty array of strings",
+            'unsupported_platforms = ["macos-x64-musl"]': "unsupported_platforms: unknown platform 'macos-x64-musl'",
+            'unsupported_platforms = ["macos-x64", "macos-x64"]': "unsupported_platforms: duplicate platforms",
+            "unsupported_platforms = [" + ",".join(f'"{p}"' for p in build.PLATFORMS) + "]": "unsupported_platforms: every platform is listed",
+        }
+        for body, message in cases.items():
+            with self.subTest(body=body):
+                self.assertIn(message, self.error(HEAD + 'url = "u"\n' + body))
+
+    def test_requires_top_level_url(self):
+        body = HEAD + 'unsupported_platforms = ["macos-x64"]\n[platforms.linux-x64]\nurl = "l"\n'
+        self.assertIn("unsupported_platforms: requires a top-level url", self.error(body))
+
+    def test_rejects_override_for_unsupported_platform(self):
+        body = HEAD + 'url = "u"\nunsupported_platforms = ["macos-x64"]\n[platforms.macos-x64]\nurl = "m"\n'
+        self.assertIn("platforms.macos-x64: listed in unsupported_platforms", self.error(body))
+
+    def test_rejects_platform_aliases_and_non_tables(self):
+        cases = {
+            '[platforms.darwin-x64]\nurl = "m"': "platforms.darwin-x64: with unsupported_platforms, use one of",
+            'platforms.linux-x64 = "s"': "platforms.linux-x64: must be a table",
+            'platforms = "s"': "platforms: must be a table",
+        }
+        for body, message in cases.items():
+            with self.subTest(body=body):
+                self.assertIn(message, self.error(HEAD + 'url = "u"\nunsupported_platforms = ["macos-x64"]\n' + body))
+
+    def test_musl_override_is_kept(self):
+        opts = self.opts('url = "u"\nunsupported_platforms = ["macos-x64"]\n[platforms.linux-x64-musl]\nbin = "m"\n')
+        self.assertEqual(opts["platforms"]["linux-x64-musl"], {"bin": "m"})
+        self.assertEqual(opts["platforms"]["linux-x64"], {"url": "u"})
+
+
 class RoundTripTest(BuildTest):
     def test_hostile_fixture(self):
         self.write("x.toml", HOSTILE)
@@ -359,6 +423,43 @@ class MirrorTest(BuildTest):
         self.assertEqual(opts["strip_components"], "1")
         self.assertEqual(opts["platforms"]["windows-x64"]["url"], "https://m.example/o/r/w")
         self.assertEqual(opts["platforms"]["linux-x64"]["url"], "https://m.example/l")
+
+    def test_unsupported_expands_after_rewrite_and_override(self):
+        opts = self.built(
+            """\
+            url = "https://github.com/o/r/a"
+            unsupported_platforms = ["macos-x64"]
+            """,
+            """\
+            [[rewrite]]
+            from = "https://github.com/"
+            to = "https://m.example/"
+            [tools.x.platforms.linux-x64]
+            url = "https://internal/l"
+            """,
+        )
+        self.assertNotIn("url", opts)
+        self.assertNotIn("macos-x64", opts["platforms"])
+        self.assertEqual(opts["platforms"]["linux-x64"]["url"], "https://internal/l")
+        self.assertEqual(opts["platforms"]["macos-arm64"]["url"], "https://m.example/o/r/a")
+
+    def test_mirror_can_supply_unsupported_platform(self):
+        opts = self.built(
+            'url = "https://h/a"\nunsupported_platforms = ["macos-x64"]\n',
+            '[tools.x.platforms.macos-x64]\nurl = "https://internal/mac"\n',
+        )
+        self.assertEqual(opts["platforms"]["macos-x64"], {"url": "https://internal/mac"})
+        self.assertEqual(opts["platforms"]["macos-arm64"], {"url": "https://h/a"})
+
+    def test_mirror_platform_alias_is_attributed_to_mirror(self):
+        errors = self.mirror_errors('[tools.x.platforms.darwin-arm64]\nurl = "m"\n', tool='url = "u"\nunsupported_platforms = ["macos-x64"]\n')
+        self.assertEqual(len(errors), 1, errors)
+        self.assertIn("platforms.darwin-arm64: with unsupported_platforms, use one of", errors[0])
+        self.assertIn("(in the mirror override)", errors[0])
+
+    def test_unsupported_is_reserved_in_mirror(self):
+        errors = self.mirror_errors('[tools.x]\nunsupported_platforms = ["macos-x64"]\n')
+        self.assertIn("mirror.toml: tools.x.unsupported_platforms: set it in tools/x.toml", errors[0])
 
     def test_override_values_are_attributed_to_mirror(self):
         errors = self.mirror_errors(

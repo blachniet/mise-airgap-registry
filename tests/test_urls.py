@@ -17,6 +17,9 @@ if platform == "windows-arm64":
     sys.exit("mise ERROR HTTP status client error (404 Not Found) for url (https://h/x-windows-arm64.zip)")
 if platform == "macos-x64":
     sys.exit("mise ERROR something else broke")
+if platform == "macos-arm64":
+    pathlib.Path("mise.lock").write_text("")
+    sys.exit()
 url = "https://h/x-linux.tar.gz" if platform.startswith("linux") else f"https://h/x-{platform}.zip"
 alias = pathlib.Path("mise.toml").read_text().splitlines()[-1].split('"')[1]
 pathlib.Path("mise.lock").write_text(
@@ -54,6 +57,12 @@ class UrlsTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout, "https://h/x-linux.tar.gz\nhttps://h/x-windows-x64.zip\n")
         self.assertIn("windows-arm64: not published (https://h/x-windows-arm64.zip returned 404)", result.stderr)
+
+    def test_reports_platforms_without_url(self):
+        result = self.run_urls("x", "1.0.0", "--platforms", "linux-x64,macos-arm64")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, "https://h/x-linux.tar.gz\n")
+        self.assertIn("macos-arm64: not supported (no URL for this platform)", result.stderr)
 
     def test_other_lock_failures_are_fatal(self):
         result = self.run_urls("x", "1.0.0", "--platforms", "linux-x64,macos-x64")
