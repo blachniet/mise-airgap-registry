@@ -1,0 +1,10 @@
+backend = "http:hk"
+test_version = "2.11.1"
+url = "https://github.com/jdx/hk/releases/download/v{{version}}/hk-{{ arch(x64='x86_64', arm64='aarch64') }}-{{ os(linux='unknown-linux-' ~ libc(), macos='apple-darwin') }}.tar.gz"
+unsupported_platforms = ["macos-x64"]
+
+[platforms.windows-x64]
+url = "https://github.com/jdx/hk/releases/download/v{{version}}/hk-x86_64-pc-windows-msvc.zip"
+
+[platforms.windows-arm64]
+url = "https://github.com/jdx/hk/releases/download/v{{version}}/hk-aarch64-pc-windows-msvc.zip"
