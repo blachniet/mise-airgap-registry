@@ -454,6 +454,11 @@ class MirrorTest(BuildTest):
         self.assertEqual(opts["platforms"]["macos-x64"], {"url": "https://internal/mac"})
         self.assertEqual(opts["platforms"]["macos-arm64"], {"url": "https://h/a"})
 
+    def test_mirror_unsupported_platform_needs_url(self):
+        errors = self.mirror_errors('[tools.x.platforms.macos-x64]\nbin = "x"\n', tool='url = "u"\nunsupported_platforms = ["macos-x64"]\n')
+        self.assertEqual(len(errors), 1, errors)
+        self.assertIn("platforms.macos-x64: supplies an unsupported platform but has no url (in the mirror override)", errors[0])
+
     def test_mirror_platform_alias_is_attributed_to_mirror(self):
         errors = self.mirror_errors('[tools.x.platforms.darwin-arm64]\nurl = "m"\n', tool='url = "u"\nunsupported_platforms = ["macos-x64"]\n')
         self.assertEqual(len(errors), 1, errors)

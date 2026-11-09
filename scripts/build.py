@@ -122,7 +122,7 @@ def pop_unsupported(spec, errors):
 
 # mise also reads aliases such as darwin-x64, [platform.*] and platform(s)_<os>_<arch>_<opt>, which would bypass
 # the unsupported check or lose to the copied url.
-def platform_errors(opts, unsupported):
+def platform_errors(opts, unsupported, mirror=False):
     for k in opts:
         if k == "platform" or k.startswith(("platform_", "platforms_")):
             yield f"{k}: with unsupported_platforms, use [platforms.<platform>] tables"
@@ -135,8 +135,10 @@ def platform_errors(opts, unsupported):
             yield f"platforms.{k}: with unsupported_platforms, use one of {', '.join(PLATFORM_KEYS)}"
         elif not isinstance(o, dict):
             yield f"platforms.{k}: must be a table"
-        elif k in unsupported:
+        elif k in unsupported and not mirror:
             yield f"platforms.{k}: listed in unsupported_platforms"
+        elif k in unsupported and "url" not in o:
+            yield f"platforms.{k}: supplies an unsupported platform but has no url"
 
 
 # mise skips a platform with no URL ("not available") but fails the whole lock on a 404, so an unsupported
@@ -247,7 +249,7 @@ def alias(f, rules=(), override=None, prefix=DEFAULT_PREFIX):
     if unsupported:
         # A fork may supply an unsupported platform from mirror.toml, e.g. an internal build.
         errs = list(platform_errors(spec, unsupported))
-        errs += [f"{e} (in the mirror override)" for e in platform_errors(override or {}, ())]
+        errs += [f"{e} (in the mirror override)" for e in platform_errors(override or {}, unsupported, mirror=True)]
         errors += errs
     rewrite_urls(spec, rules)
     merge(spec, override or {})
