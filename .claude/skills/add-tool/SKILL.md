@@ -5,7 +5,7 @@ description: Add a new tools/<name>.toml entry to this airgap registry. Discover
 
 # Add a tool to the airgap registry
 
-Each `tools/<name>.toml` becomes alias `airgap:<name>` (the prefix is `prefix` in `mirror.toml`; `airgap` by default, and `airgap:` below stands for it) in `dist/mise.toml` (committed, built by `mise run build`). `tools/*.toml` always hold the internet URLs; forks map them to internal locations in `mirror.toml`, never in `tools/`. A fork's internal-only tool (not on the internet) goes in `tools/local/<name>.toml` with its internal URL; upstream never adds files there, and `mirror.toml` doesn't apply to it. Skip the internet discovery steps for those. See `tools/*.toml` for working examples of every pattern below.
+Each `tools/<name>.toml` becomes alias `airgap:<name>` in `dist/mise.toml` (`airgap:` stands for `prefix` in `mirror.toml`). `tools/*.toml` hold internet URLs only. A fork's internal-only tool goes in `tools/local/<name>.toml` with its internal URL; skip discovery for those. See `tools/*.toml` for working examples of every pattern below.
 
 ## 1. Discover
 
@@ -29,34 +29,29 @@ url = "https://.../{{version}}/<name>_{{ os(macos='darwin') }}_{{ arch(x64='amd6
 url = "https://.../<name>_windows_amd64.zip"
 ```
 
-- File stem must match `[a-z0-9][a-z0-9_-]*`. `backend` must be `http:<name>`. `test_version` is required and is not emitted.
-- `test_command` (optional, not emitted) defaults to `<name> --version`. Set it when the binary or flag differs, e.g. `"tofu --version"`, `"kubectl version --client"`.
-- One templated `url`, plus `[platforms.<os>-<arch>]` overrides only for exceptions. Any option can be overridden per platform.
+- `test_command` (not emitted) defaults to `<name> --version`; set it when that doesn't work, e.g. `"kubectl version --client"`.
+- One templated `url`, plus `[platforms.<os>-<arch>]` overrides only for exceptions.
 - Tera: `os()` → linux/macos/windows, `arch()` → x64/arm64, both take rename kwargs. Use single quotes inside `{{ }}` (the TOML string is double-quoted).
-- libc split: prefer gnu, with musl only on musl hosts: `{{ os(linux='unknown-linux-' ~ libc(), macos='apple-darwin') }}`. Don't hard-code musl. `mise lock` treats `linux-x64` and `linux-x64-musl` as separate targets.
+- libc split: `{{ os(linux='unknown-linux-' ~ libc(), macos='apple-darwin') }}`. Don't hard-code musl; `mise lock` treats `linux-x64` and `linux-x64-musl` as separate targets.
 - Archive with one top-level dir: `strip_components = 1`; override to `0` per platform if that platform's archive is flat.
 - Archive whose binary has a platform-suffixed name or no exec bit (terragrunt): `rename_exe = "<name>"`.
 - Raw binary: `bin = "<name>"`; Windows overrides need `bin = "<name>.exe"`.
-- Format (`.zip`/`.tar.gz`) is auto-detected; no `format` needed.
-- Missing platform: list it in `unsupported_platforms` (not emitted), e.g. `unsupported_platforms = ["macos-x64"]` for hk. Platforms are `linux-x64`, `linux-arm64`, `macos-x64`, `macos-arm64`, `windows-x64`, `windows-arm64`. Without it, `mise install` and `mise lock` fail on the 404 in any project with a `mise.lock`, on every host. With it, build.py copies the top-level `url` to each other platform and drops it, so `mise lock` skips that platform (`mise install` on it fails with "No URL for platform"). Requires a top-level `url`; override keys must be canonical (`darwin-x64` etc. are rejected) and can't name an unsupported platform.
-- build.py doesn't check option names. mise rejects unknown ones at install: "option `x` is not used by the http backend".
+- Missing platform: `unsupported_platforms = ["macos-x64"]` (not emitted; names as in `[platforms.*]`). Without it the 404 breaks `mise install`/`mise lock` on every host, since they lock all common platforms. Installing on the listed platform itself still fails; mention that to the user.
 
 ## 3. Verify
 
 ```sh
 mise run build
 mise run validate <name>   # sandboxed install of test_version, then test_command
-mise run urls <name>       # every platform's URL; 404s and unsupported platforms reported on stderr
+mise run urls <name>       # every platform's URL
 mise run test
 ```
 
-- Both tasks run in an isolated sandbox. **Never `mise use 'airgap:x@v'`**: in mise 2026.11.x it fails with "Http backend requires 'url' option", and for a tool already in `[tools]` it inlines the registry's options into the project file.
+- Both tasks run in a sandbox. **Never `mise use 'airgap:x@v'`** (see AGENTS.md).
 - CI runs `validate` on Linux, macOS and Windows, so check the Windows overrides carefully even though you can't run them locally.
-- `mise run urls` reports each 404 platform as not published and each `unsupported_platforms` platform as not supported. If the tool does publish that platform, fix the template or override; if it doesn't, add it to `unsupported_platforms`.
-- `validate` fails on a 404 for any platform mise locks by default (linux x64/arm64 gnu and musl, macos x64/arm64, windows-x64), not only the host. Add the missing one to `unsupported_platforms`. `validate` skips the tool on a host listed in `unsupported_platforms`.
+- A 404 on any platform (in `validate` or `urls`) means a wrong template or override, or a platform the tool doesn't publish: add that to `unsupported_platforms`.
 - Large downloads (vault) can exceed the default 2-minute Bash timeout; raise it.
 - Some tools phone home on `--version` (sops prints "(latest)"). Note that for the user.
-- If `dist/mise.toml` breaks, every mise command fails; recover with `uv run scripts/build.py tools dist/mise.toml mirror.toml` or `git checkout dist/`.
 
 ## 4. Finish
 
